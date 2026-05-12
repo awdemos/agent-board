@@ -75,10 +75,10 @@ type GraphPositionRow = {
   time_updated: number
 }
 
-let ready = false
+let initialized = false
 
 function ensure() {
-  if (ready) return
+  if (initialized) return
   Database.use((db: DbClient) => {
     db.run(sql`
       CREATE TABLE IF NOT EXISTS agentboard_project (
@@ -163,7 +163,7 @@ function ensure() {
       )
     `)
   })
-  ready = true
+  initialized = true
 }
 
 function projectFromRow(row: ProjectRow): AgentBoardProject {

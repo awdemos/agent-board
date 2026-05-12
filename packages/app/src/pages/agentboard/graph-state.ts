@@ -29,10 +29,10 @@ export type AgentBoardGraph = {
 
 const COLUMN_RANK = {
   blocked: 0,
-  ready: 1,
-  running: 2,
-  needs_review: 3,
-  closed: 4,
+  open: 0,
+  running: 1,
+  needs_review: 2,
+  closed: 3,
 }
 
 function priorityRank(card: AgentBoardCard) {
@@ -171,7 +171,7 @@ export function buildAgentBoardGraph(board: AgentBoardBoard, query = ""): AgentB
         pinned: false,
         blockedBy: blockers,
         unblocks,
-        critical: unblocks >= 2 || blockers >= 2 || card.column === "blocked",
+        critical: unblocks >= 2 || blockers >= 2,
       })
     })
   }

@@ -6,7 +6,7 @@ import { COLUMN_ACCENT } from "./ui-tokens"
 
 const MINIMAP_STATUS_FILL: Record<AgentBoardColumnID, string> = {
   blocked: "#ff7b72",
-  ready: "#7ee787",
+  open: "#7ee787",
   running: "#f2cc60",
   needs_review: "#79c0ff",
   closed: "#d2a8ff",
@@ -55,7 +55,7 @@ export function GraphMinimap(props: {
       <div class="absolute bottom-4 right-4 hidden w-44 rounded-lg border border-border-weaker-base bg-background-base/95 p-2 shadow-lg backdrop-blur md:block">
         <div class="mb-1 flex items-center justify-between text-10-semibold uppercase tracking-wide text-text-weak">
           <span>Map</span>
-          <div class="-mr-1 flex items-center gap-1">
+          <div class="flex items-center gap-1.5">
             <span class="tabular-nums">{Math.round(props.scale * 100)}%</span>
             <Tooltip placement="top" value="Fit graph to view">
               <IconButton
@@ -76,19 +76,22 @@ export function GraphMinimap(props: {
             <For each={props.edges}>
               {(edge) => (
                 <line
+                  class={
+                    edge.active
+                      ? "text-text-strong"
+                      : edge.critical
+                        ? "text-[#f85149]"
+                        : edge.muted
+                          ? "text-border-strong-base"
+                          : "text-border-strong-base"
+                  }
                   x1={edge.x1}
                   y1={edge.y1}
                   x2={edge.x2}
                   y2={edge.y2}
-                  stroke={
-                    edge.active
-                      ? "rgba(255, 255, 255, 0.72)"
-                      : edge.critical
-                        ? "rgba(255, 123, 114, 0.50)"
-                        : "rgba(139, 148, 158, 0.34)"
-                  }
-                  stroke-opacity={edge.muted ? 0.28 : 1}
-                  stroke-width={edge.active ? 0.9 : edge.critical ? 0.7 : 0.45}
+                  stroke="currentColor"
+                  stroke-opacity={edge.active ? 0.95 : edge.muted ? 0.28 : edge.critical ? 0.72 : 0.62}
+                  stroke-width={edge.active ? 1.05 : edge.critical ? 0.75 : 0.55}
                   vector-effect="non-scaling-stroke"
                 />
               )}
@@ -119,7 +122,7 @@ export function GraphMinimap(props: {
           <Show when={props.viewportBounds}>
             {(bounds) => (
               <div
-                class="pointer-events-none absolute z-20 rounded border border-[#58a6ff] bg-[#58a6ff]/12 shadow-[0_0_0_999px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.16)_inset,0_0_12px_rgba(88,166,255,0.30)]"
+                class="pointer-events-none absolute z-20 rounded-md border border-[#58a6ff] bg-[#58a6ff]/12 shadow-[0_0_0_999px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.16)_inset,0_0_12px_rgba(88,166,255,0.30)]"
                 style={{
                   left: `${bounds().left}%`,
                   top: `${bounds().top}%`,

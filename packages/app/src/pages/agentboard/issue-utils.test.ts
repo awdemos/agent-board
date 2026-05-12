@@ -16,7 +16,7 @@ function issue(id: string, raw: Record<string, unknown> = {}): BeadsIssue {
 
 function card(id: string, raw: Record<string, unknown> = {}): AgentBoardCard {
   return {
-    column: "ready",
+    column: "open",
     issue: issue(id, raw),
     artifacts: [],
     events: [],

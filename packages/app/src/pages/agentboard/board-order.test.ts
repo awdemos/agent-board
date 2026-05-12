@@ -4,7 +4,7 @@ import { applyBoardOrder, insertArrayItemBefore, normalizeColumnOrder, orderFrom
 
 function card(id: string): AgentBoardCard {
   return {
-    column: "ready",
+    column: "open",
     issue: { id, title: id, raw: {} },
     artifacts: [],
     events: [],
@@ -17,8 +17,7 @@ function board(): AgentBoardBoard {
     generatedAt: 1,
     graph: { dependencies: [], positions: [] },
     columns: [
-      { id: "blocked", title: "Blocked", cards: [] },
-      { id: "ready", title: "Ready", cards: [card("A"), card("B"), card("C")] },
+      { id: "open", title: "Open", cards: [card("A"), card("B"), card("C")] },
       { id: "running", title: "Running", cards: [card("D")] },
       { id: "needs_review", title: "Needs Review", cards: [] },
       { id: "closed", title: "Closed", cards: [] },
@@ -28,10 +27,9 @@ function board(): AgentBoardBoard {
 
 describe("agentboard board order", () => {
   test("normalizes invalid and duplicate columns", () => {
-    expect(normalizeColumnOrder(["running", "ready", "running", "unknown" as never])).toEqual([
+    expect(normalizeColumnOrder(["running", "open", "running", "unknown" as never])).toEqual([
       "running",
-      "ready",
-      "blocked",
+      "open",
       "needs_review",
       "closed",
     ])
@@ -39,18 +37,17 @@ describe("agentboard board order", () => {
 
   test("applies saved column and card order while preserving unknown cards", () => {
     const ordered = applyBoardOrder(board(), {
-      columns: ["running", "ready", "closed", "blocked", "needs_review"],
-      cards: { ready: ["C", "A"] },
+      columns: ["running", "open", "closed", "blocked", "needs_review"],
+      cards: { open: ["C", "A"] },
     })
 
     expect(ordered.columns.map((column) => column.id)).toEqual([
       "running",
-      "ready",
+      "open",
       "closed",
-      "blocked",
       "needs_review",
     ])
-    expect(ordered.columns.find((column) => column.id === "ready")?.cards.map((item) => item.issue.id)).toEqual([
+    expect(ordered.columns.find((column) => column.id === "open")?.cards.map((item) => item.issue.id)).toEqual([
       "C",
       "A",
       "B",
@@ -58,10 +55,10 @@ describe("agentboard board order", () => {
   })
 
   test("captures order from current board", () => {
-    const order = orderFromBoard(board(), ["ready", "running"])
+    const order = orderFromBoard(board(), ["open", "running"])
 
-    expect(order.columns).toEqual(["ready", "running", "blocked", "needs_review", "closed"])
-    expect(order.cards.ready).toEqual(["A", "B", "C"])
+    expect(order.columns).toEqual(["open", "running", "needs_review", "closed"])
+    expect(order.cards.open).toEqual(["A", "B", "C"])
     expect(order.cards.running).toEqual(["D"])
   })
 

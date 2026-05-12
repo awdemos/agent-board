@@ -116,6 +116,52 @@ function resolvePositionCollisions(
   return positions
 }
 
+function reduceLongEdgeNodeCrossings(
+  input: AgentBoardGraphPosition[],
+  layers: Record<string, number>,
+  outgoing: Map<string, Set<string>>,
+  options: Pick<AgentBoardGraphDependencyOptions, "nodeWidth" | "nodeHeight" | "rowGap">,
+) {
+  const positions = input.map((position) => ({ ...position }))
+  const byID = new Map(positions.map((position) => [position.issueID, position]))
+  const safety = 24
+  const push = Math.max(options.nodeHeight + 28, options.rowGap * 0.8)
+
+  for (let pass = 0; pass < 6; pass++) {
+    let moved = false
+    for (const source of positions) {
+      const sourceLayer = layers[source.issueID]
+      if (sourceLayer === undefined) continue
+      for (const targetID of outgoing.get(source.issueID) ?? []) {
+        const target = byID.get(targetID)
+        const targetLayer = target ? layers[target.issueID] : undefined
+        if (!target || targetLayer === undefined || Math.abs(sourceLayer - targetLayer) <= 1) continue
+        const left = Math.min(source.x + options.nodeWidth, target.x + options.nodeWidth)
+        const right = Math.max(source.x, target.x)
+        if (right <= left) continue
+        const y = source.y + options.nodeHeight / 2
+        for (const middle of positions) {
+          if (middle.issueID === source.issueID || middle.issueID === target.issueID) continue
+          const layer = layers[middle.issueID]
+          if (layer === undefined) continue
+          if (layer <= Math.min(sourceLayer, targetLayer) || layer >= Math.max(sourceLayer, targetLayer)) continue
+          const middleLeft = middle.x - safety
+          const middleRight = middle.x + options.nodeWidth + safety
+          const middleTop = middle.y - safety
+          const middleBottom = middle.y + options.nodeHeight + safety
+          if (middleRight < left || middleLeft > right) continue
+          if (y < middleTop || y > middleBottom) continue
+          middle.y += push
+          moved = true
+        }
+      }
+    }
+    if (!moved) break
+  }
+
+  return positions
+}
+
 export function getDependencyEdgeNodes(
   a: AgentBoardGraphNode | undefined,
   b: AgentBoardGraphNode | undefined,
@@ -215,6 +261,7 @@ function buildDependencyComponents(connected: AgentBoardGraphNode[], outgoing: M
     outgoing: new Set<number>(),
     layer: 0,
   }))
+  const incomingComponents = new Map<number, Set<number>>(output.map((component) => [component.id, new Set<number>()]))
 
   for (const node of connected) {
     const sourceComponent = componentByNodeID.get(node.id)
@@ -223,6 +270,7 @@ function buildDependencyComponents(connected: AgentBoardGraphNode[], outgoing: M
       const targetComponent = componentByNodeID.get(targetID)
       if (targetComponent === undefined || targetComponent === sourceComponent) continue
       output[sourceComponent]?.outgoing.add(targetComponent)
+      incomingComponents.get(targetComponent)?.add(sourceComponent)
     }
   }
 
@@ -239,6 +287,15 @@ function buildDependencyComponents(connected: AgentBoardGraphNode[], outgoing: M
   }
 
   for (const component of output) component.layer = layerForComponent(component.id)
+  for (const component of output) {
+    if (component.outgoing.size > 0) continue
+    const incoming = Array.from(incomingComponents.get(component.id) ?? [])
+      .map((id) => output[id]?.layer)
+      .filter((layer): layer is number => layer !== undefined)
+    if (incoming.length === 0) continue
+    const nearestParentLayer = Math.min(...incoming)
+    component.layer = Math.max(component.layer, nearestParentLayer - 1)
+  }
   return { components: output, componentByNodeID }
 }
 
@@ -278,6 +335,13 @@ function layoutDependencyIsland(
       .filter((node): node is AgentBoardGraphNode => node !== undefined)
     return Math.min(...componentNodes.map(nodeScore))
   }
+  const terminalBias = (node: AgentBoardGraphNode) => ((outgoing.get(node.id)?.size ?? 0) > 0 ? 1 : 0)
+  const componentTerminalBias = (component: DependencyComponent) => {
+    const componentNodes = component.nodeIDs
+      .map((id) => nodesByID.get(id))
+      .filter((node): node is AgentBoardGraphNode => node !== undefined)
+    return Math.min(...componentNodes.map(terminalBias))
+  }
 
   const layerIndexes = Array.from(byLayer.keys()).sort((a, b) => a - b)
   const maxLayer = Math.max(...layerIndexes)
@@ -289,13 +353,13 @@ function layoutDependencyIsland(
   }
   for (const layerIndex of layerIndexes) {
     const componentGroup = [...(byLayer.get(layerIndex) ?? [])].sort((a, b) => {
-      return componentScore(a) - componentScore(b) || a.id - b.id
+      return componentTerminalBias(a) - componentTerminalBias(b) || componentScore(a) - componentScore(b) || a.id - b.id
     })
     const layerNodes = componentGroup.flatMap((component) =>
       component.nodeIDs
         .map((id) => nodesByID.get(id))
         .filter((node): node is AgentBoardGraphNode => node !== undefined)
-        .sort((a, b) => nodeScore(a) - nodeScore(b) || a.id.localeCompare(b.id)),
+        .sort((a, b) => terminalBias(a) - terminalBias(b) || nodeScore(a) - nodeScore(b) || a.id.localeCompare(b.id)),
     )
     setOrder(layerIndex, layerNodes)
   }
@@ -305,6 +369,53 @@ function layoutDependencyIsland(
     if (orders.length === 0) return Number.POSITIVE_INFINITY
     return orders.reduce((sum, order) => sum + order, 0) / orders.length
   }
+  const neighborBarycenter = (node: AgentBoardGraphNode) => {
+    const values = [neighborOrder(node, "incoming"), neighborOrder(node, "outgoing")].filter(Number.isFinite)
+    if (values.length === 0) return Number.POSITIVE_INFINITY
+    return values.reduce((sum, value) => sum + value, 0) / values.length
+  }
+  const orderPenalty = (layersToScore: Map<number, AgentBoardGraphNode[]>) => {
+    const order = new Map<string, number>()
+    for (const nodes of layersToScore.values()) nodes.forEach((node, index) => order.set(node.id, index))
+    let score = 0
+    for (const source of island) {
+      const sourceLayer = layers[source.id]
+      const sourceOrder = order.get(source.id)
+      if (sourceLayer === undefined || sourceOrder === undefined) continue
+      for (const targetID of outgoing.get(source.id) ?? []) {
+        const target = nodesByID.get(targetID)
+        const targetLayer = target ? layers[target.id] : undefined
+        const targetOrder = order.get(targetID)
+        if (!target || targetLayer === undefined || targetOrder === undefined) continue
+        const distance = Math.abs(targetOrder - sourceOrder)
+        score += distance * distance + Math.abs(targetLayer - sourceLayer) * distance * 0.35
+      }
+    }
+    return score
+  }
+  const reduceOrderPenalty = () => {
+    for (let pass = 0; pass < 4; pass++) {
+      let improved = false
+      for (const layerIndex of layerIndexes) {
+        const current = [...(orderedByLayer.get(layerIndex) ?? [])]
+        if (current.length < 2) continue
+        for (let index = 0; index < current.length - 1; index++) {
+          const before = orderPenalty(orderedByLayer)
+          ;[current[index], current[index + 1]] = [current[index + 1], current[index]]
+          const candidate = new Map(orderedByLayer)
+          candidate.set(layerIndex, current)
+          const after = orderPenalty(candidate)
+          if (after < before) {
+            setOrder(layerIndex, [...current])
+            improved = true
+          } else {
+            ;[current[index], current[index + 1]] = [current[index + 1], current[index]]
+          }
+        }
+      }
+      if (!improved) break
+    }
+  }
   for (let pass = 0; pass < 6; pass++) {
     for (const layerIndex of layerIndexes) {
       const current = [...(orderedByLayer.get(layerIndex) ?? [])]
@@ -313,6 +424,8 @@ function layoutDependencyIsland(
         current.sort(
           (a, b) =>
             neighborOrder(a, "outgoing") - neighborOrder(b, "outgoing") ||
+            neighborBarycenter(a) - neighborBarycenter(b) ||
+            terminalBias(a) - terminalBias(b) ||
             nodeScore(a) - nodeScore(b) ||
             a.id.localeCompare(b.id),
         ),
@@ -325,12 +438,15 @@ function layoutDependencyIsland(
         current.sort(
           (a, b) =>
             neighborOrder(a, "incoming") - neighborOrder(b, "incoming") ||
+            neighborBarycenter(a) - neighborBarycenter(b) ||
+            terminalBias(a) - terminalBias(b) ||
             nodeScore(a) - nodeScore(b) ||
             a.id.localeCompare(b.id),
         ),
       )
     }
   }
+  reduceOrderPenalty()
 
   const maxRows = Math.max(1, ...Array.from(orderedByLayer.values()).map((nodes) => nodes.length))
   const rowGap =
@@ -354,7 +470,8 @@ function layoutDependencyIsland(
     })
   }
 
-  const relaxed = resolvePositionCollisions(positions, options)
+  const untangled = reduceLongEdgeNodeCrossings(positions, layers, outgoing, options)
+  const relaxed = resolvePositionCollisions(untangled, options)
   const bounds = positionBounds(relaxed, options)
   const normalized = relaxed.map((position) => ({
     ...position,

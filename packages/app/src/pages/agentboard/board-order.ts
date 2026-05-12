@@ -1,5 +1,5 @@
 import type { AgentBoardBoard, AgentBoardCard, AgentBoardColumnID } from "./api"
-import { BOARD_COLUMN_IDS, isBoardColumnID } from "./board-state"
+import { BOARD_COLUMN_IDS, normalizeBoardColumnID } from "./board-state"
 
 const BOARD_ORDER_STORAGE_PREFIX = "agentboard.order"
 
@@ -23,9 +23,10 @@ export function normalizeColumnOrder(input?: AgentBoardColumnID[]) {
   const seen = new Set<AgentBoardColumnID>()
   const output: AgentBoardColumnID[] = []
   for (const column of input ?? []) {
-    if (!isBoardColumnID(column) || seen.has(column)) continue
-    seen.add(column)
-    output.push(column)
+    const normalized = normalizeBoardColumnID(column)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    output.push(normalized)
   }
   for (const column of BOARD_COLUMN_IDS) {
     if (!seen.has(column)) output.push(column)
@@ -39,9 +40,10 @@ export function loadBoardOrder(directory: string): BoardLocalOrder {
     const raw = localStorage.getItem(boardOrderKey(directory))
     if (!raw) return defaultBoardOrder()
     const parsed = JSON.parse(raw) as Partial<BoardLocalOrder>
+    const parsedCards = parsed.cards as Record<string, string[] | undefined> | undefined
     const cards: BoardLocalOrder["cards"] = {}
     for (const column of BOARD_COLUMN_IDS) {
-      const order = parsed.cards?.[column]
+      const order = parsedCards?.[column] ?? (column === "open" ? parsedCards?.ready : undefined)
       if (Array.isArray(order)) cards[column] = order.filter((id): id is string => typeof id === "string")
     }
     return {

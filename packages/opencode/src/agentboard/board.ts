@@ -12,13 +12,13 @@ import type {
 
 const COLUMN_TITLES: Record<AgentBoardColumnID, string> = {
   blocked: "Blocked",
-  ready: "Ready",
+  open: "Open",
   running: "Running",
   needs_review: "Needs Review",
   closed: "Closed",
 }
 
-const COLUMN_ORDER: AgentBoardColumnID[] = ["blocked", "ready", "running", "needs_review", "closed"]
+const COLUMN_ORDER: AgentBoardColumnID[] = ["open", "running", "needs_review", "closed"]
 const ACTIVE_RUN_STATUS = new Set(["queued", "running"])
 
 export function columnForIssue(base: AgentBoardColumnID, run?: AgentBoardRun): AgentBoardColumnID {
@@ -29,17 +29,26 @@ export function columnForIssue(base: AgentBoardColumnID, run?: AgentBoardRun): A
   return base
 }
 
+function columnForBeadsStatus(issue: BeadsIssue): AgentBoardColumnID {
+  const status = issue.status?.toLowerCase().replaceAll("-", "_")
+  if (status === "closed" || status === "done") return "closed"
+  if (status === "in_progress" || status === "running") return "running"
+  if (status === "needs_review" || status === "review") return "needs_review"
+  return "open"
+}
+
 export async function getAgentBoard(worktree: string): Promise<AgentBoardBoard> {
   const project = AgentBoardStore.upsertProject({ worktree })
   await AgentBoardReconciler.reconcile(project.id)
-  const [blocked, ready, inProgress, closed] = await Promise.all([
+  const [blocked, open, inProgress, closed] = await Promise.all([
     Beads.listBlocked(worktree),
-    Beads.listReady(worktree),
+    Beads.listOpen(worktree),
     Beads.listInProgress(worktree),
     Beads.listClosed(worktree),
   ])
   const latest = AgentBoardStore.latestRunByIssue(project.id)
   const seen = new Set<string>()
+  const blockedIDs = new Set(blocked.map((issue) => issue.id))
 
   const columns = new Map<AgentBoardColumnID, AgentBoardCard[]>(COLUMN_ORDER.map((id) => [id, [] as AgentBoardCard[]]))
 
@@ -47,9 +56,10 @@ export async function getAgentBoard(worktree: string): Promise<AgentBoardBoard> 
     if (seen.has(issue.id)) return
     const run = latest.get(issue.id)
     const projected = columnForIssue(column, run)
+    const projectedIssue = blockedIDs.has(issue.id) ? { ...issue, blocked: true } : issue
     seen.add(issue.id)
     columns.get(projected)!.push({
-      issue,
+      issue: projectedIssue,
       column: projected,
       latestRun: run,
       activeRun: run && ACTIVE_RUN_STATUS.has(run.status) ? run : undefined,
@@ -58,8 +68,8 @@ export async function getAgentBoard(worktree: string): Promise<AgentBoardBoard> 
     })
   }
 
-  for (const issue of blocked) add(issue, "blocked")
-  for (const issue of ready) add(issue, "ready")
+  for (const issue of open) add(issue, "open")
+  for (const issue of blocked) add(issue, columnForBeadsStatus(issue))
   for (const issue of inProgress) add(issue, "running")
 
   for (const run of AgentBoardStore.listRuns(project.id)) {

@@ -1,12 +1,10 @@
 import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import type { AgentBoardBoard, AgentBoardCard, AgentBoardColumnID, AgentBoardGraphPosition } from "./api"
 import { buildGraphDependencyLayout, getDependencyEdgeNodes } from "./graph-layout"
 import { GraphMinimap } from "./graph-minimap"
 import { buildAgentBoardGraph, type AgentBoardGraphNode } from "./graph-state"
-import { COLUMN_ACCENT, issueIDTone, priorityTone, statusLabel, visibleStatus } from "./ui-tokens"
+import { COLUMN_ACCENT, issueIDTone, priorityClass, statusLabel, visibleStatus } from "./ui-tokens"
 
 export type AgentBoardViewMode = "board" | "list" | "graph"
 
@@ -21,6 +19,7 @@ const GRAPH_LAYOUT_NODE_GAP = 96
 const GRAPH_LAYOUT_LAYER_GAP = 360
 const GRAPH_EDGE_NODE_PADDING = 30
 const GRAPH_EDGE_APPROACH_CLEARANCE = 52
+const GRAPH_EDGE_TARGET_CLEARANCE = 92
 const GRAPH_EDGE_LANE_STEP = 104
 const GRAPH_EDGE_LANE_ATTEMPTS = 10
 const GRAPH_EDGE_TERMINAL_GAP = 22
@@ -56,14 +55,14 @@ function priorityRank(priority?: number | string) {
 
 function dependencyLabel(node: AgentBoardGraphNode) {
   if (node.blockedBy > 0 && node.unblocks > 0) {
-    return `${node.blockedBy} blocker${node.blockedBy === 1 ? "" : "s"}`
+    return `Blocked by ${node.blockedBy}`
   }
-  if (node.blockedBy > 0) return `${node.blockedBy} blocker${node.blockedBy === 1 ? "" : "s"}`
-  return "No visible blockers"
+  if (node.blockedBy > 0) return `Blocked by ${node.blockedBy}`
+  return "No visible dependencies"
 }
 
 function graphNodeSubtitle(node: AgentBoardGraphNode) {
-  if (node.blockedBy > 0) return `${node.blockedBy} blocker${node.blockedBy === 1 ? "" : "s"}`
+  if (node.blockedBy > 0) return `Blocked by ${node.blockedBy}`
   return ""
 }
 
@@ -159,6 +158,17 @@ function scoreGraphRouteSegments(
   return collisions * 1000 + centerCuts * 120 + nearMisses * 28 + lengthPenalty + positionPenalty
 }
 
+function segmentsFromPoints(points: GraphPoint[]) {
+  const segments: Array<[GraphPoint, GraphPoint]> = []
+  for (let index = 0; index < points.length - 1; index++) {
+    const a = points[index]!
+    const b = points[index + 1]!
+    if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5) continue
+    segments.push([a, b])
+  }
+  return segments
+}
+
 function roundedElbowPath(start: GraphPoint, laneX: number, end: GraphPoint) {
   const first = { x: laneX, y: start.y }
   const second = { x: laneX, y: end.y }
@@ -242,13 +252,6 @@ function sideAngle(side: GraphSide) {
   if (side === "right") return Math.PI
   if (side === "top") return Math.PI / 2
   return -Math.PI / 2
-}
-
-function sideOut(point: GraphPoint, side: GraphSide, distance: number): GraphPoint {
-  if (side === "left") return { x: point.x - distance, y: point.y }
-  if (side === "right") return { x: point.x + distance, y: point.y }
-  if (side === "top") return { x: point.x, y: point.y - distance }
-  return { x: point.x, y: point.y + distance }
 }
 
 function rectsOverlapOrNear(a: AgentBoardGraphNode, b: AgentBoardGraphNode, margin: number) {
@@ -343,21 +346,34 @@ function directGraphEdge(
   }
 }
 
+function figmaConnectorPath(start: GraphPoint, end: GraphPoint, direction: number) {
+  const lead = 42
+  const sourceLead = { x: start.x + direction * lead, y: start.y }
+  const targetLead = { x: end.x - direction * lead, y: end.y }
+  const availableWidth = Math.abs(targetLead.x - sourceLead.x)
+  if (availableWidth < 76) {
+    const laneY = (start.y + end.y) / 2
+    return roundedPolylinePath([start, sourceLead, { x: sourceLead.x, y: laneY }, { x: targetLead.x, y: laneY }, targetLead, end], 28)
+  }
+  const laneY = (start.y + end.y) / 2
+  return roundedPolylinePath([start, sourceLead, { x: sourceLead.x, y: laneY }, { x: targetLead.x, y: laneY }, targetLead, end], 42)
+}
+
 function dependencyGraphEdge(
   a: AgentBoardGraphNode | undefined,
   b: AgentBoardGraphNode | undefined,
   active: boolean,
   dependencyLayers: Record<string, number>,
+  nodes: AgentBoardGraphNode[] = [],
 ): GraphEdgeShape {
   const { source, target } = getDependencyEdgeNodes(a, b, dependencyLayers)
   if (!source || !target) return { line: "", arrow: "" }
   const sourceCenter = { x: source.x + GRAPH_NODE_WIDTH / 2, y: source.y + GRAPH_NODE_HEIGHT / 2 }
   const targetCenter = { x: target.x + GRAPH_NODE_WIDTH / 2, y: target.y + GRAPH_NODE_HEIGHT / 2 }
   const dx = targetCenter.x - sourceCenter.x
-  const dy = targetCenter.y - sourceCenter.y
-  const sideFlow = Math.abs(dx) >= GRAPH_NODE_WIDTH * 0.45
-  const sourceSide: GraphSide = sideFlow ? (dx >= 0 ? "right" : "left") : dy >= 0 ? "bottom" : "top"
-  const targetSide: GraphSide = sideFlow ? (dx >= 0 ? "left" : "right") : dy >= 0 ? "top" : "bottom"
+  const direction = Math.sign(dx) || 1
+  const sourceSide: GraphSide = direction > 0 ? "right" : "left"
+  const targetSide: GraphSide = direction > 0 ? "left" : "right"
   if (rectsOverlapOrNear(source, target, GRAPH_EDGE_APPROACH_CLEARANCE)) {
     const laneX = outsideLaneForNodes(source, target)
     const sourceSide: GraphSide = laneX < source.x ? "left" : "right"
@@ -381,19 +397,67 @@ function dependencyGraphEdge(
   const start = sideAnchor(source, sourceSide, 0)
   const end = sideAnchor(target, targetSide, 0)
   const arrow = graphArrow(end, sideAngle(targetSide), active)
-  if (sideFlow) {
-    const laneX = (start.x + end.x) / 2
+  {
+    const midpoint = (start.x + end.x) / 2
+    const sourceLaneX = start.x + direction * GRAPH_EDGE_APPROACH_CLEARANCE
+    const targetLaneX = arrow.base.x - direction * GRAPH_EDGE_TARGET_CLEARANCE
+    const minLaneX = Math.min(sourceLaneX, targetLaneX)
+    const maxLaneX = Math.max(sourceLaneX, targetLaneX)
+    const laneFitsBetweenNodes = direction > 0 ? sourceLaneX <= targetLaneX : targetLaneX <= sourceLaneX
+    const outsideLaneX =
+      direction > 0
+        ? Math.min(source.x, target.x) - GRAPH_EDGE_OUTSIDE_GAP
+        : Math.max(source.x + GRAPH_NODE_WIDTH, target.x + GRAPH_NODE_WIDTH) + GRAPH_EDGE_OUTSIDE_GAP
+    const normalizeLane = (laneX: number) => (laneFitsBetweenNodes ? clamp(laneX, minLaneX, maxLaneX) : outsideLaneX)
+    if (!laneFitsBetweenNodes) {
+      return {
+        line: figmaConnectorPath(start, arrow.base, direction),
+        arrow: arrow.path,
+      }
+    }
+    const candidates = [normalizeLane(midpoint)]
+    for (let attempt = 1; attempt <= GRAPH_EDGE_LANE_ATTEMPTS; attempt++) {
+      candidates.push(
+        normalizeLane(midpoint + attempt * GRAPH_EDGE_LANE_STEP),
+        normalizeLane(midpoint - attempt * GRAPH_EDGE_LANE_STEP),
+      )
+    }
+    const obstacleRects = nodes
+      .filter((node) => node.id !== source.id && node.id !== target.id)
+      .map((node) => graphNodeRect(node, GRAPH_EDGE_NODE_PADDING))
+    const candidateFor = (points: GraphPoint[]) => ({
+      points,
+      score: scoreGraphRouteSegments(segmentsFromPoints(points), obstacleRects, midpoint, (start.y + arrow.base.y) / 2),
+    })
+    const routeCandidates = candidates.map((laneX) =>
+      candidateFor([start, { x: laneX, y: start.y }, { x: laneX, y: arrow.base.y }, arrow.base]),
+    )
+    const xMin = Math.min(start.x, arrow.base.x)
+    const xMax = Math.max(start.x, arrow.base.x)
+    const crossingRects = obstacleRects.filter((rect) => rect.maxX >= xMin && rect.minX <= xMax)
+    if (crossingRects.length > 0) {
+      const top = Math.min(...crossingRects.map((rect) => rect.minY), start.y, arrow.base.y) - 34
+      const bottom = Math.max(...crossingRects.map((rect) => rect.maxY), start.y, arrow.base.y) + 34
+      const sourceLaneX = start.x + direction * GRAPH_EDGE_APPROACH_CLEARANCE
+      const targetLaneX = arrow.base.x - direction * GRAPH_EDGE_TARGET_CLEARANCE
+      for (const laneY of [top, bottom]) {
+        routeCandidates.push(
+          candidateFor([
+            start,
+            { x: sourceLaneX, y: start.y },
+            { x: sourceLaneX, y: laneY },
+            { x: targetLaneX, y: laneY },
+            { x: targetLaneX, y: arrow.base.y },
+            arrow.base,
+          ]),
+        )
+      }
+    }
+    const best = routeCandidates.reduce((best, candidate) => (candidate.score < best.score ? candidate : best))
     return {
-      line: roundedElbowPath(start, laneX, arrow.base),
+      line: roundedPolylinePath(best.points, 36),
       arrow: arrow.path,
     }
-  }
-  const control = Math.max(36, Math.min(90, Math.hypot(dx, dy) * 0.14))
-  const c1 = sideOut(start, sourceSide, control)
-  const c2 = sideOut(arrow.base, targetSide, control)
-  return {
-    line: `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${arrow.base.x} ${arrow.base.y}`,
-    arrow: arrow.path,
   }
 }
 
@@ -406,7 +470,7 @@ function routeGraphEdge(
   edgeOffset = 0,
 ): GraphEdgeShape {
   if (!source || !target) return { line: "", arrow: "" }
-  if (Object.keys(dependencyLayers).length > 0) return dependencyGraphEdge(source, target, active, dependencyLayers)
+  if (Object.keys(dependencyLayers).length > 0) return dependencyGraphEdge(source, target, active, dependencyLayers, nodes)
   const sourceCenter = { x: source.x + GRAPH_NODE_WIDTH / 2, y: source.y + GRAPH_NODE_HEIGHT / 2 }
   const targetCenter = { x: target.x + GRAPH_NODE_WIDTH / 2, y: target.y + GRAPH_NODE_HEIGHT / 2 }
   if (Math.abs(targetCenter.x - sourceCenter.x) < GRAPH_NODE_WIDTH * 0.35) {
@@ -438,19 +502,25 @@ function routeGraphEdge(
     x: target.x + (forward ? -8 : GRAPH_NODE_WIDTH + 8),
     y: targetCenter.y,
   }
+  const arrow = graphArrow(end, forward ? 0 : Math.PI, active)
   const midpoint = (start.x + end.x) / 2
-  const minLaneX = forward
-    ? start.x + GRAPH_EDGE_APPROACH_CLEARANCE
-    : end.x + GRAPH_EDGE_APPROACH_CLEARANCE
-  const maxLaneX = forward
-    ? end.x - GRAPH_EDGE_APPROACH_CLEARANCE
-    : start.x - GRAPH_EDGE_APPROACH_CLEARANCE
-  const laneFitsBetweenNodes = minLaneX <= maxLaneX
+  const sourceLaneX = start.x + side * GRAPH_EDGE_APPROACH_CLEARANCE
+  const targetLaneX = arrow.base.x - side * GRAPH_EDGE_TARGET_CLEARANCE
+  const minLaneX = Math.min(sourceLaneX, targetLaneX)
+  const maxLaneX = Math.max(sourceLaneX, targetLaneX)
+  const laneFitsBetweenNodes = forward ? sourceLaneX <= targetLaneX : targetLaneX <= sourceLaneX
+  const outsideLaneX = forward
+    ? Math.min(source.x, target.x) - GRAPH_EDGE_OUTSIDE_GAP
+    : Math.max(source.x + GRAPH_NODE_WIDTH, target.x + GRAPH_NODE_WIDTH) + GRAPH_EDGE_OUTSIDE_GAP
   const normalizeLane = (laneX: number) => {
     if (laneFitsBetweenNodes) return clamp(laneX, minLaneX, maxLaneX)
-    return forward
-      ? Math.min(start.x + GRAPH_EDGE_APPROACH_CLEARANCE, end.x - GRAPH_EDGE_APPROACH_CLEARANCE)
-      : Math.max(start.x - GRAPH_EDGE_APPROACH_CLEARANCE, end.x + GRAPH_EDGE_APPROACH_CLEARANCE)
+    return outsideLaneX
+  }
+  if (!laneFitsBetweenNodes) {
+    return {
+      line: figmaConnectorPath(start, arrow.base, side),
+      arrow: arrow.path,
+    }
   }
   const candidates = [normalizeLane(midpoint)]
   for (let attempt = 1; attempt <= GRAPH_EDGE_LANE_ATTEMPTS; attempt++) {
@@ -517,7 +587,6 @@ function routeGraphEdge(
   })
   const elbowScore = scoreGraphRouteSegments(elbowSegments, obstacleRects, midpoint, (start.y + end.y) / 2)
   const bestDetour = detours.reduce((best, candidate) => (candidate.score < best.score ? candidate : best))
-  const arrow = graphArrow(end, forward ? 0 : Math.PI, active)
   if (bestDetour.score + 12 < elbowScore) {
     const points = [...bestDetour.points.slice(0, -1), arrow.base]
     return {
@@ -583,6 +652,7 @@ function buildGraphSeedNodes(
   const depthOrder = Array.from(byDepth.keys()).sort((a, b) => a - b)
   const orderByID = new Map<string, number>()
   const baseSort = (a: AgentBoardGraphNode, b: AgentBoardGraphNode) =>
+    (outgoing.get(a.id)?.length ? 1 : 0) - (outgoing.get(b.id)?.length ? 1 : 0) ||
     a.y - b.y ||
     priorityRank(a.card.issue.priority) - priorityRank(b.card.issue.priority) ||
     a.card.issue.title.localeCompare(b.card.issue.title) ||
@@ -740,13 +810,13 @@ function GraphNodeCard(props: {
       </Show>
       <div class="flex h-5 items-center gap-1.5">
         <span
-          class={`inline-flex min-w-0 max-w-[8.5rem] items-center rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${accent().tint} ${accent().ring}`}
+          class={`inline-flex min-w-0 max-w-[8.5rem] items-center rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset [&_[data-component=icon]]:text-inherit ${accent().tint} ${accent().ring}`}
         >
           <span class="truncate">{statusLabel(status(), { capitalize: true })}</span>
         </span>
         <Show when={card().issue.priority !== undefined}>
           <span
-            class={`rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(card().issue.priority)}`}
+            class={`rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityClass(card().issue.priority, card().column === "closed")}`}
           >
             P{card().issue.priority}
           </span>
@@ -755,32 +825,37 @@ function GraphNodeCard(props: {
       <div class="min-h-0 flex-1 overflow-hidden pt-2">
         <h3 class="line-clamp-2 text-13-semibold leading-snug text-text-strong">{card().issue.title}</h3>
       </div>
-      <div class="mt-2 flex h-5 shrink-0 items-center gap-2 text-11-regular">
-        <span class={`max-w-[8.5rem] truncate ${issueIDTone()}`}>{card().issue.id}</span>
-        <Show when={props.node.blockedBy > 0}>
-          <span
-            class="ml-auto inline-flex min-w-0 max-w-[7rem] items-center gap-1 text-text-weak"
-            title={`${dependencyLabel(props.node)} visible in this graph view`}
-          >
-            <Icon name="branch" class="size-3 shrink-0" />
-            <span class="truncate">{graphNodeSubtitle(props.node)}</span>
-          </span>
-        </Show>
-        <Show when={card().column === "ready"}>
-          <button
-            type="button"
-            class="hidden h-6 shrink-0 items-center gap-1 rounded bg-primary px-2 text-10-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50 group-hover:inline-flex group-focus-within:inline-flex"
-            disabled={props.busy}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation()
-              props.onChat()
-            }}
-          >
-            <Icon name="bubble-5" class="size-3" />
-            Chat
-          </button>
-        </Show>
+      <div class="mt-2 flex h-5 shrink-0 items-center justify-between gap-2 text-11-regular">
+        <div class="flex min-w-0 items-center gap-1.5">
+          <span class={`max-w-[8.5rem] truncate ${issueIDTone()}`}>{card().issue.id}</span>
+          <Show when={props.node.blockedBy > 0}>
+            <span
+              class="inline-flex size-6 shrink-0 items-center justify-center rounded bg-[#da3633]/12 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-1 ring-inset ring-[#f85149]/40 [&_[data-component=icon]]:text-inherit"
+              title={`${dependencyLabel(props.node)} visible in this graph view`}
+              aria-label={`${dependencyLabel(props.node)} visible in this graph view`}
+            >
+              <Icon name="lock" class="size-3 shrink-0 text-inherit" />
+            </span>
+          </Show>
+        </div>
+        <div class="flex h-6 min-w-[3.75rem] shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+          <Show when={card().column === "open"}>
+            <button
+              type="button"
+              class="inline-flex h-6 items-center gap-1 rounded bg-primary px-2 text-10-semibold uppercase tracking-wide text-primary-foreground transition-[box-shadow,opacity,transform] duration-150 hover:opacity-90 hover:shadow-xs-border-base active:translate-y-px disabled:opacity-50"
+              disabled={props.busy}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                props.onChat()
+              }}
+              aria-label={`Open chat for ${card().issue.id}`}
+            >
+              <Icon name="bubble-5" class="size-3" />
+              Chat
+            </button>
+          </Show>
+        </div>
       </div>
     </article>
   )
@@ -806,9 +881,13 @@ export function GraphMode(props: {
   const [localPositions, setLocalPositions] = createSignal<Record<string, AgentBoardGraphPosition>>({})
   const [manuallyMovedIDs, setManuallyMovedIDs] = createSignal<Set<string>>(new Set())
   const [userEditedGraph, setUserEditedGraph] = createSignal(false)
+  const [draggingIssueID, setDraggingIssueID] = createSignal<string>()
   const [rootElement, setRootElement] = createSignal<HTMLDivElement>()
   let arrangedSignature = ""
   let didDrag = false
+  let routedEdgeShapeCache = new Map<string, GraphEdgeShape>()
+  let pendingNodeDrag: AgentBoardGraphPosition | undefined
+  let nodeDragFrame: number | undefined
   let minimapPointer:
     | {
         rect: DOMRect
@@ -829,23 +908,13 @@ export function GraphMode(props: {
         startY: number
         originX: number
         originY: number
+        grabOffsetX: number
+        grabOffsetY: number
       }
     | undefined
 
   const baseGraph = createMemo(() => buildAgentBoardGraph(props.board, props.query))
-  const graph = createMemo(() => {
-    const local = localPositions()
-    const nodes = baseGraph().nodes.map((node) => {
-      const position = local[node.id]
-      return position ? { ...node, x: position.x, y: position.y, pinned: position.pinned } : node
-    })
-    return {
-      ...baseGraph(),
-      nodes,
-      width: Math.max(baseGraph().width, ...nodes.map((node) => node.x + GRAPH_NODE_WIDTH + 96)),
-      height: Math.max(baseGraph().height, ...nodes.map((node) => node.y + GRAPH_NODE_HEIGHT + 96)),
-    }
-  })
+  const graph = createMemo(() => baseGraph())
   const graphFilterCounts = createMemo(() => {
     const current = graph()
     const count = (value: GraphFilter) =>
@@ -910,12 +979,13 @@ export function GraphMode(props: {
     }
     return undefined
   })
-  const visibleGraph = createMemo(() => {
+  const automaticVisibleGraph = createMemo(() => {
     const input = visibleGraphInput()
     const { current, rawNodes, edges, layoutEdges } = input
     const visibleBlockedBy = new Map(rawNodes.map((node) => [node.id, 0]))
     const visibleUnblocks = new Map(rawNodes.map((node) => [node.id, 0]))
     for (const edge of edges) {
+      if (edge.type !== "blocks") continue
       visibleUnblocks.set(edge.sourceIssueID, (visibleUnblocks.get(edge.sourceIssueID) ?? 0) + 1)
       visibleBlockedBy.set(edge.targetIssueID, (visibleBlockedBy.get(edge.targetIssueID) ?? 0) + 1)
     }
@@ -928,7 +998,7 @@ export function GraphMode(props: {
     const auto = autoPositionsSignature() === input.signature ? autoPositions() : {}
     const nodes = automaticNodes.map((node) => {
       const autoPosition = auto[node.id]
-      const automatic = autoPosition
+      return autoPosition
         ? {
             ...node,
             x: autoPosition.x,
@@ -936,10 +1006,23 @@ export function GraphMode(props: {
             pinned: autoPosition.pinned,
           }
         : node
-      const position = localPositions()[node.id]
-      if (!position || !manuallyMovedIDs().has(node.id)) return automatic
+    })
+    return {
+      ...current,
+      nodes,
+      edges,
+      layoutEdges,
+    }
+  })
+  const visibleGraph = createMemo(() => {
+    const current = automaticVisibleGraph()
+    const local = localPositions()
+    const moved = manuallyMovedIDs()
+    const nodes = current.nodes.map((node) => {
+      const position = local[node.id]
+      if (!position || !moved.has(node.id)) return node
       return {
-        ...automatic,
+        ...node,
         x: position.x,
         y: position.y,
         pinned: position.pinned,
@@ -948,8 +1031,6 @@ export function GraphMode(props: {
     return {
       ...current,
       nodes,
-      edges,
-      layoutEdges,
       width: Math.max(960, ...nodes.map((node) => node.x + GRAPH_NODE_WIDTH + GRAPH_FOCUS_PADDING)),
       height: Math.max(560, ...nodes.map((node) => node.y + GRAPH_NODE_HEIGHT + GRAPH_FOCUS_PADDING)),
     }
@@ -1024,9 +1105,11 @@ export function GraphMode(props: {
     const nodes = current.nodes
     const nodesByID = nodeMap()
     const id = focusID()
+    const draggingID = draggingIssueID()
     const layers = dependencyLayers()
     const pairCounts = new Map<string, number>()
-    return current.edges.map((edge, index) => {
+    const nextCache = new Map<string, GraphEdgeShape>()
+    const edges = current.edges.map((edge, index) => {
       const active = id !== undefined && (edge.sourceIssueID === id || edge.targetIssueID === id)
       const muted = id !== undefined && edge.sourceIssueID !== id && edge.targetIssueID !== id
       const source = nodesByID.get(edge.sourceIssueID)
@@ -1034,6 +1117,20 @@ export function GraphMode(props: {
       const pairKey = [source?.depth ?? 0, target?.depth ?? 0].join(":")
       const edgeOffset = pairCounts.get(pairKey) ?? 0
       pairCounts.set(pairKey, edgeOffset + 1)
+      const connectedToDrag =
+        draggingID !== undefined && (edge.sourceIssueID === draggingID || edge.targetIssueID === draggingID)
+      const cachedShape = draggingID !== undefined && !connectedToDrag ? routedEdgeShapeCache.get(edge.id) : undefined
+      const shape =
+        cachedShape ??
+        routeGraphEdge(
+          source,
+          target,
+          nodes,
+          active,
+          layers,
+          edgeOffset,
+        )
+      nextCache.set(edge.id, shape)
       return {
         id: edge.id,
         active,
@@ -1041,23 +1138,18 @@ export function GraphMode(props: {
         critical: edge.critical,
         paintOrder: active ? 3 : edge.critical ? 2 : muted ? 0 : 1,
         sourceOrder: index,
-        shape: routeGraphEdge(
-          source,
-          target,
-          nodes,
-          active,
-          layers,
-          edgeOffset,
-        ),
+        shape,
         tone: active ? "text-border-strong-base" : edge.critical ? "text-border-strong-base" : "text-border-base",
         opacity: active ? 1 : muted ? 0.34 : id !== undefined ? 0.72 : 0.94,
       }
     }).sort((a, b) => a.paintOrder - b.paintOrder || a.sourceOrder - b.sourceOrder)
+    routedEdgeShapeCache = nextCache
+    return edges
   })
   const columnStats = createMemo(() => {
     const counts = new Map<AgentBoardColumnID, number>()
     for (const node of visibleGraph().nodes) counts.set(node.card.column, (counts.get(node.card.column) ?? 0) + 1)
-    return (["blocked", "ready", "running", "needs_review", "closed"] as const)
+    return (["open", "running", "needs_review", "closed"] as const)
       .map((column) => ({ column, count: counts.get(column) ?? 0 }))
       .filter((item) => item.count > 0)
   })
@@ -1148,6 +1240,23 @@ export function GraphMode(props: {
     window.addEventListener("pointerup", onMinimapPointerUp, GRAPH_POINTER_OPTIONS)
   }
 
+  function flushPendingNodeDrag() {
+    const position = pendingNodeDrag
+    if (!position) return
+    pendingNodeDrag = undefined
+    nodeDragFrame = undefined
+    setLocalPositions((current) => ({
+      ...current,
+      [position.issueID]: position,
+    }))
+  }
+
+  function scheduleNodeDrag(position: AgentBoardGraphPosition) {
+    pendingNodeDrag = position
+    if (nodeDragFrame !== undefined) return
+    nodeDragFrame = window.requestAnimationFrame(flushPendingNodeDrag)
+  }
+
   function selectFilter(value: GraphFilter) {
     if (value === "all") {
       props.onClearWorkFilters?.()
@@ -1203,15 +1312,6 @@ export function GraphMode(props: {
           }}
         </For>
       </div>
-      <Tooltip placement="top" value="Auto-arrange graph">
-        <IconButton
-          icon="file-tree"
-          variant="ghost"
-          size="small"
-          onClick={arrangeGraph}
-          aria-label="Auto-arrange graph"
-        />
-      </Tooltip>
     </div>
   )
 
@@ -1227,28 +1327,33 @@ export function GraphMode(props: {
       })
       return
     }
-    const scale = viewport().scale
-    const x = pointer.originX + (event.clientX - pointer.startX) / scale
-    const y = pointer.originY + (event.clientY - pointer.startY) / scale
+    const world = screenToWorld(event.clientX, event.clientY)
+    const x = world.x - pointer.grabOffsetX
+    const y = world.y - pointer.grabOffsetY
     const issueID = pointer.issueID
-    setManuallyMovedIDs((current) => new Set(current).add(issueID))
-    setUserEditedGraph(true)
-    setLocalPositions((current) => ({
-      ...current,
-      [issueID]: {
-        issueID,
-        x,
-        y,
-        pinned: true,
-      },
-    }))
+    if (didDrag) {
+      setManuallyMovedIDs((current) => (current.has(issueID) ? current : new Set(current).add(issueID)))
+      setUserEditedGraph(true)
+    }
+    scheduleNodeDrag({
+      issueID,
+      x,
+      y,
+      pinned: true,
+    })
   }
 
   function onPointerUp() {
+    if (nodeDragFrame !== undefined) {
+      window.cancelAnimationFrame(nodeDragFrame)
+      nodeDragFrame = undefined
+    }
+    flushPendingNodeDrag()
     if (pointer?.type === "node") {
       const position = localPositions()[pointer.issueID]
       if (position) props.onSavePositions([position])
     }
+    setDraggingIssueID(undefined)
     pointer = undefined
     window.removeEventListener("pointermove", onPointerMove, GRAPH_POINTER_OPTIONS)
     window.removeEventListener("pointerup", onPointerUp, GRAPH_POINTER_OPTIONS)
@@ -1262,6 +1367,7 @@ export function GraphMode(props: {
   function beginPointer(next: typeof pointer) {
     if (pointer) onPointerUp()
     pointer = next
+    setDraggingIssueID(next?.type === "node" ? next.issueID : undefined)
     didDrag = false
     window.addEventListener("pointermove", onPointerMove, GRAPH_POINTER_OPTIONS)
     window.addEventListener("pointerup", onPointerUp, GRAPH_POINTER_OPTIONS)
@@ -1306,6 +1412,7 @@ export function GraphMode(props: {
   })
 
   onCleanup(() => {
+    if (nodeDragFrame !== undefined) window.cancelAnimationFrame(nodeDragFrame)
     window.removeEventListener("pointermove", onPointerMove, GRAPH_POINTER_OPTIONS)
     window.removeEventListener("pointerup", onPointerUp, GRAPH_POINTER_OPTIONS)
     window.removeEventListener("pointermove", onMinimapPointerMove, GRAPH_POINTER_OPTIONS)
@@ -1397,6 +1504,7 @@ export function GraphMode(props: {
                   if (event.button !== 0) return
                   event.preventDefault()
                   event.stopPropagation()
+                  const world = screenToWorld(event.clientX, event.clientY)
                   beginPointer({
                     type: "node",
                     issueID: node.id,
@@ -1404,6 +1512,8 @@ export function GraphMode(props: {
                     startY: event.clientY,
                     originX: node.x,
                     originY: node.y,
+                    grabOffsetX: world.x - node.x,
+                    grabOffsetY: world.y - node.y,
                   })
                 }}
               />

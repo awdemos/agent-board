@@ -1,13 +1,45 @@
 import type { AgentBoardBoard, AgentBoardCard, AgentBoardColumnID } from "./api"
 
-export const BOARD_COLUMN_IDS = ["blocked", "ready", "running", "needs_review", "closed"] as const
+export const BOARD_COLUMN_IDS = ["open", "running", "needs_review", "closed"] as const
+
+const BOARD_COLUMN_ID_SET = new Set<string>(BOARD_COLUMN_IDS)
+
+export function normalizeBoardColumnID(value: string | undefined): AgentBoardColumnID | undefined {
+  if (value === "ready") return "open"
+  if (value === "blocked") return "open"
+  return value && BOARD_COLUMN_ID_SET.has(value) ? (value as AgentBoardColumnID) : undefined
+}
 
 export function isBoardColumnID(value: string): value is AgentBoardColumnID {
-  return BOARD_COLUMN_IDS.includes(value as AgentBoardColumnID)
+  return !!normalizeBoardColumnID(value)
 }
 
 export function allCards(board?: AgentBoardBoard) {
   return board?.columns.flatMap((column) => column.cards) ?? []
+}
+
+export function normalizeBoard(board: AgentBoardBoard): AgentBoardBoard {
+  const columns = new Map<AgentBoardColumnID, AgentBoardBoard["columns"][number]>()
+  for (const id of BOARD_COLUMN_IDS) {
+    columns.set(id, { id, title: id === "needs_review" ? "Needs Review" : id.charAt(0).toUpperCase() + id.slice(1), cards: [] })
+  }
+  for (const column of board.columns) {
+    const id = normalizeBoardColumnID(column.id)
+    if (!id) continue
+    const current = columns.get(id)
+    const title = id === "open" ? "Open" : column.title
+    const legacyBlockedColumn = column.id === "blocked"
+    const cards = column.cards.map((card) => ({
+      ...card,
+      column: id,
+      issue: legacyBlockedColumn ? { ...card.issue, blocked: true } : card.issue,
+    }))
+    columns.set(id, current ? { ...current, title, cards: [...current.cards, ...cards] } : { id, title, cards })
+  }
+  return {
+    ...board,
+    columns: BOARD_COLUMN_IDS.map((id) => columns.get(id)!),
+  }
 }
 
 export function findCard(board: AgentBoardBoard | undefined, issueID: string | undefined) {
@@ -18,9 +50,6 @@ export function findCard(board: AgentBoardBoard | undefined, issueID: string | u
 export function canMoveCardTo(card: AgentBoardCard, target: AgentBoardColumnID, options?: { allowSameColumn?: boolean }) {
   if (target === card.column && !options?.allowSameColumn) {
     return { ok: false, reason: "Card is already in this column." }
-  }
-  if (card.column === "blocked") {
-    return { ok: false, reason: "Resolve this card's blocking dependencies in Beads before moving it." }
   }
   if (target === "blocked") {
     return { ok: false, reason: "Blocked is derived from Beads dependencies and cannot be set manually." }
@@ -35,7 +64,7 @@ export function canMoveCardTo(card: AgentBoardCard, target: AgentBoardColumnID, 
 }
 
 function issueStatusForColumn(column: AgentBoardColumnID) {
-  if (column === "ready") return "open"
+  if (column === "open") return "open"
   if (column === "running" || column === "needs_review") return "in_progress"
   if (column === "closed") return "closed"
   return undefined

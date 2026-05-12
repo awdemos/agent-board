@@ -1,6 +1,6 @@
 export type AgentBoardRunStatus = "queued" | "running" | "needs_review" | "done" | "cancelled" | "failed"
 
-export type AgentBoardColumnID = "blocked" | "ready" | "running" | "needs_review" | "closed"
+export type AgentBoardColumnID = "blocked" | "open" | "running" | "needs_review" | "closed"
 
 export type BeadsIssue = {
   id: string

@@ -1,7 +1,7 @@
 import type { ServerConnection } from "@/context/server"
 
 export type AgentBoardRunStatus = "queued" | "running" | "needs_review" | "done" | "cancelled" | "failed"
-export type AgentBoardColumnID = "blocked" | "ready" | "running" | "needs_review" | "closed"
+export type AgentBoardColumnID = "blocked" | "open" | "running" | "needs_review" | "closed"
 
 export type BeadsIssue = {
   id: string
@@ -113,7 +113,7 @@ export type AgentBoardBoard = {
   }
 }
 
-export type AgentBoardStartReadyResult = {
+export type AgentBoardStartOpenResult = {
   started: AgentBoardRun[]
   skipped: Array<{ issueID: string; reason: string }>
   failed: Array<{ issueID: string; error: string }>
@@ -166,8 +166,8 @@ export function createAgentBoardClient(input: { server: ServerConnection.HttpBas
         body: JSON.stringify(input),
       }),
     startRun: (issueID: string) => request<AgentBoardRun>(`/cards/${encodeURIComponent(issueID)}/run`, { method: "POST" }),
-    startReady: (input?: { limit?: number }) =>
-      request<AgentBoardStartReadyResult>("/runs/start-ready", {
+    startOpen: (input?: { limit?: number }) =>
+      request<AgentBoardStartOpenResult>("/runs/start-open", {
         method: "POST",
         body: JSON.stringify(input ?? {}),
       }),

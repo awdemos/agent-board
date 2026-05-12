@@ -44,7 +44,7 @@ export const COLUMN_ACCENT: Record<AgentBoardColumnID, ColumnAccent> = {
     glow: "shadow-xs-border-critical-base",
     drop: "bg-[#da3633]/10 ring-[#f85149]/30",
   },
-  ready: {
+  open: {
     dot: "bg-[#3fb950]",
     text: "text-[#1a7f37]",
     tint: "bg-[#238636]/14 text-[color-mix(in_oklch,#1a7f37_62%,var(--text-strong))]",
@@ -84,7 +84,7 @@ export const COLUMN_ACCENT: Record<AgentBoardColumnID, ColumnAccent> = {
 
 export const COLUMN_ICON: Record<AgentBoardColumnID, IconProps["name"]> = {
   blocked: "circle-ban-sign",
-  ready: "circle-check",
+  open: "circle-check",
   running: "brain",
   needs_review: "review",
   closed: "archive",
@@ -99,6 +99,16 @@ export function priorityTone(priority?: number | string) {
   )
 }
 
+export function priorityClass(priority: number | string | undefined, closed?: boolean) {
+  return closed
+    ? `${priorityTone(priority)} opacity-60 line-through decoration-current decoration-1`
+    : priorityTone(priority)
+}
+
+export function closedBadgeClass(closed?: boolean) {
+  return closed ? "opacity-60 line-through decoration-current decoration-1" : ""
+}
+
 export function issueIDTone() {
   return "rounded bg-surface-raised-base px-1.5 py-0.5 font-mono text-10-semibold text-text-weak ring-1 ring-inset ring-border-weaker-base"
 }
@@ -107,6 +117,9 @@ export function statusTone(status?: string) {
   const value = status?.toLowerCase().replaceAll("-", "_").replaceAll(" ", "_")
   if (!value) return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
   if (value === "failed" || value === "cancelled") {
+    return "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-[#f85149]/45"
+  }
+  if (value === "blocked") {
     return "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-[#f85149]/45"
   }
   if (value === "needs_review" || value === "review") {
@@ -134,8 +147,9 @@ export function statusLabel(status?: string, options?: { capitalize?: boolean })
 export function visibleStatus(card: AgentBoardCard) {
   const run = card.latestRun
   if (run && run.status !== "cancelled") return run.status
+  if (card.column === "blocked") return "blocked"
   if (card.issue.status) return card.issue.status
-  if (card.column === "ready") return "open"
+  if (card.column === "open") return "open"
   if (card.column === "running") return "in_progress"
   if (card.column === "closed") return "closed"
   return card.column

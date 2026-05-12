@@ -4,7 +4,7 @@ import type { AgentBoardArtifact, AgentBoardRunEvent } from "./api"
 import { formatRelative, formatTime } from "./time-utils"
 
 const EVENT_LABEL: Record<string, string> = {
-  queued: "Queued from Ready",
+  queued: "Queued from Open",
   lease_acquired: "Picked up the work",
   beads_status_updated: "Updated tracker status",
   session_created: "Opened a chat session",

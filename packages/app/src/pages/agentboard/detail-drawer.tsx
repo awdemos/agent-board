@@ -1,5 +1,6 @@
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
+import { showToast } from "@opencode-ai/ui/toast"
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { ArtifactView, Timeline } from "./activity"
 import { type AgentBoardCard, type AgentBoardColumnID, type AgentBoardDependency } from "./api"
@@ -21,8 +22,8 @@ const RUNNING = new Set(["queued", "running"])
 
 const COLUMN_HINT: Record<AgentBoardColumnID, string> = {
   blocked: "Dependency-derived",
-  ready: "Runnable now",
-  running: "Owned by an agent",
+  open: "Open work",
+  running: "Owned by a model",
   needs_review: "Awaiting humans",
   closed: "Done",
 }
@@ -34,6 +35,75 @@ const REVIEW_PRESETS = [
 ]
 
 export type DrawerTab = "details" | "timeline" | "artifacts" | "raw"
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
+
+function JsonPrimitive(props: { value: JsonValue }) {
+  if (props.value === null) return <span class="text-text-muted">null</span>
+  if (typeof props.value === "string") return <span class="text-text-base">"{props.value}"</span>
+  if (typeof props.value === "number") return <span class="text-text-base">{props.value}</span>
+  if (typeof props.value === "boolean") return <span class="text-text-base">{String(props.value)}</span>
+  return null
+}
+
+function JsonTree(props: { value: JsonValue; depth?: number }) {
+  const depth = () => props.depth ?? 0
+  const indent = () => `${depth() * 14}px`
+  const nextDepth = () => depth() + 1
+  const entries = () =>
+    props.value && typeof props.value === "object" && !Array.isArray(props.value)
+      ? Object.entries(props.value)
+      : []
+  return (
+    <Show
+      when={props.value && typeof props.value === "object"}
+      fallback={<JsonPrimitive value={props.value} />}
+    >
+      <Show
+        when={Array.isArray(props.value)}
+        fallback={
+          <>
+            <span class="text-text-muted">{"{"}</span>
+            <div>
+              <For each={entries()}>
+                {([key, value], index) => (
+                  <div style={{ "padding-left": indent() }}>
+                    <span class="text-syntax-property">"{key}"</span>
+                    <span class="text-syntax-punctuation">: </span>
+                    <JsonTree value={value} depth={nextDepth()} />
+                    <Show when={index() < entries().length - 1}>
+                      <span class="text-syntax-punctuation">,</span>
+                    </Show>
+                  </div>
+                )}
+              </For>
+            </div>
+            <span style={{ "padding-left": `${Math.max(depth() - 1, 0) * 14}px` }} class="text-text-muted">
+              {"}"}
+            </span>
+          </>
+        }
+      >
+        <span class="text-text-muted">[</span>
+        <div>
+          <For each={props.value as JsonValue[]}>
+            {(value, index) => (
+              <div style={{ "padding-left": indent() }}>
+                <JsonTree value={value} depth={nextDepth()} />
+                <Show when={index() < (props.value as JsonValue[]).length - 1}>
+                  <span class="text-text-muted">,</span>
+                </Show>
+              </div>
+            )}
+          </For>
+        </div>
+        <span style={{ "padding-left": `${Math.max(depth() - 1, 0) * 14}px` }} class="text-text-muted">
+          ]
+        </span>
+      </Show>
+    </Show>
+  )
+}
 
 function DependencyMiniCard(props: {
   issueID: string
@@ -82,6 +152,38 @@ function DependencyMiniCard(props: {
   )
 }
 
+function DependencySection(props: {
+  title: string
+  items: Array<{ id: string; type: string; card?: AgentBoardCard }>
+  onSelectCard: (issueID: string) => void
+}) {
+  return (
+    <Show when={props.items.length > 0}>
+      <section class="rounded-md bg-surface-raised-base p-3">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-10-semibold uppercase tracking-wider text-text-weak">{props.title}</h3>
+          <span class="rounded bg-background-base px-1.5 py-0.5 text-10-semibold tabular-nums text-text-base ring-1 ring-inset ring-border-weaker-base">
+            {props.items.length}
+          </span>
+        </div>
+        <div class="mt-2 space-y-1.5">
+          <For each={props.items}>
+            {(item) => (
+              <DependencyMiniCard
+                issueID={item.id}
+                card={item.card}
+                onSelect={() => {
+                  if (item.card) props.onSelectCard(item.id)
+                }}
+              />
+            )}
+          </For>
+        </div>
+      </section>
+    </Show>
+  )
+}
+
 export function DetailDrawer(props: {
   card: AgentBoardCard
   cards: AgentBoardCard[]
@@ -103,12 +205,31 @@ export function DetailDrawer(props: {
   const [message, setMessage] = createSignal("")
   const run = () => props.card.latestRun
   const cardByID = createMemo(() => new Map(props.cards.map((card) => [card.issue.id, card] as const)))
-  const blockers = createMemo(() =>
+  const blockingPrerequisites = createMemo(() =>
     props.dependencies
       .filter((dependency) => dependency.type === "blocks" && dependency.fromIssueID === props.card.issue.id)
       .map((dependency) => ({
         id: dependency.toIssueID,
+        type: dependency.type,
         card: cardByID().get(dependency.toIssueID),
+      })),
+  )
+  const dependencies = createMemo(() =>
+    props.dependencies
+      .filter((dependency) => dependency.type !== "blocks" && dependency.fromIssueID === props.card.issue.id)
+      .map((dependency) => ({
+        id: dependency.toIssueID,
+        type: dependency.type,
+        card: cardByID().get(dependency.toIssueID),
+      })),
+  )
+  const blockedDependents = createMemo(() =>
+    props.dependencies
+      .filter((dependency) => dependency.type === "blocks" && dependency.toIssueID === props.card.issue.id)
+      .map((dependency) => ({
+        id: dependency.fromIssueID,
+        type: dependency.type,
+        card: cardByID().get(dependency.fromIssueID),
       })),
   )
   const createdAt = () => issueCreatedTimestamp(props.card.issue)
@@ -119,7 +240,7 @@ export function DetailDrawer(props: {
   const canReview = () => run()?.status === "needs_review" || run()?.status === "failed"
   const accent = () => COLUMN_ACCENT[props.card.column]
   const moveLabel = (column: AgentBoardColumnID) =>
-    column === "needs_review" ? "Review" : column === "ready" ? "Ready" : column === "running" ? "Running" : "Closed"
+    column === "needs_review" ? "Review" : column === "open" ? "Open" : column === "running" ? "Running" : "Closed"
   const moveDisabled = (column: AgentBoardColumnID) => props.busy || !canMoveCardTo(props.card, column).ok
   const applyPreset = (preset: string) => {
     const current = message().trim()
@@ -128,6 +249,26 @@ export function DetailDrawer(props: {
   const requestChanges = () => {
     props.onRequestChanges(message())
     setMessage("")
+  }
+  const rawText = () => JSON.stringify(props.card.issue.raw, null, 2)
+  const copyRaw = () => {
+    void navigator.clipboard
+      ?.writeText(rawText())
+      .then(() =>
+        showToast({
+          variant: "success",
+          icon: "circle-check",
+          title: "Copied raw issue data",
+          description: props.card.issue.id,
+        }),
+      )
+      .catch((error: unknown) =>
+        showToast({
+          variant: "error",
+          title: "Could not copy raw issue data",
+          description: error instanceof Error ? error.message : "Clipboard write failed.",
+        }),
+      )
   }
   const tabs = createMemo(() =>
     [
@@ -179,9 +320,9 @@ export function DetailDrawer(props: {
           <Show when={issueTypeMeta(props.card.issue)}>
             {(meta) => (
               <span
-                class={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-10-semibold uppercase tracking-wide ring-1 ring-inset ${meta().tone}`}
+                class={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-10-semibold uppercase tracking-wide ring-1 ring-inset [&_[data-component=icon]]:text-inherit ${meta().tone}`}
               >
-                <Icon name={meta().icon} class={`size-3 ${meta().iconClass}`} />
+                <Icon name={meta().icon} class="size-3 text-inherit" />
                 {meta().label}
               </span>
             )}
@@ -266,29 +407,13 @@ export function DetailDrawer(props: {
                 </div>
               </Show>
             </section>
-            <Show when={blockers().length > 0}>
-              <section class="rounded-md bg-surface-raised-base p-3">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="text-10-semibold uppercase tracking-wider text-text-weak">Blocked by</h3>
-                  <span class="rounded bg-background-base px-1.5 py-0.5 text-10-semibold tabular-nums text-text-base ring-1 ring-inset ring-border-weaker-base">
-                    {blockers().length}
-                  </span>
-                </div>
-                <div class="mt-2 space-y-1.5">
-                  <For each={blockers()}>
-                    {(blocker) => (
-                      <DependencyMiniCard
-                        issueID={blocker.id}
-                        card={blocker.card}
-                        onSelect={() => {
-                          if (blocker.card) props.onSelectCard(blocker.id)
-                        }}
-                      />
-                    )}
-                  </For>
-                </div>
-              </section>
-            </Show>
+            <DependencySection
+              title="Blocked by"
+              items={blockingPrerequisites()}
+              onSelectCard={props.onSelectCard}
+            />
+            <DependencySection title="Depends on" items={dependencies()} onSelectCard={props.onSelectCard} />
+            <DependencySection title="Blocks" items={blockedDependents()} onSelectCard={props.onSelectCard} />
             <Show when={run()}>
               {(current) => (
                 <section class="rounded-md bg-surface-raised-base p-3">
@@ -378,9 +503,18 @@ export function DetailDrawer(props: {
         </Show>
 
         <Show when={props.tab === "raw"}>
-          <pre class="overflow-auto rounded-md bg-surface-raised-base p-3 font-mono text-11-regular text-text-base">
-            {JSON.stringify(props.card.issue.raw, null, 2)}
-          </pre>
+          <div class="relative overflow-auto rounded-md bg-surface-raised-base p-3 pr-12 font-mono text-11-regular leading-relaxed text-text-base">
+            <button
+              type="button"
+              class="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded bg-background-base text-text-weak shadow-xs-border-base transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong-base"
+              onClick={copyRaw}
+              aria-label="Copy raw data"
+              title="Copy raw data"
+            >
+              <Icon name="copy" class="size-3.5" />
+            </button>
+            <JsonTree value={props.card.issue.raw as JsonValue} />
+          </div>
         </Show>
       </div>
 
@@ -421,7 +555,7 @@ export function DetailDrawer(props: {
         <div class="mb-3">
           <div class="mb-1.5 text-10-semibold uppercase tracking-wider text-text-weak">Move to</div>
           <div class="flex flex-wrap gap-1">
-            <For each={["ready", "running", "needs_review", "closed"] as const}>
+            <For each={["open", "running", "needs_review", "closed"] as const}>
               {(column) => (
                 <button
                   type="button"

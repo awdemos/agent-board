@@ -12,7 +12,7 @@ const options = {
   rowGap: 184,
 }
 
-function node(id: string, column: AgentBoardCard["column"] = "ready"): AgentBoardGraphNode {
+function node(id: string, column: AgentBoardCard["column"] = "open"): AgentBoardGraphNode {
   return {
     id,
     card: {

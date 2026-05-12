@@ -3,21 +3,22 @@ import { createMemo, For, Show } from "solid-js"
 import { eventLabel } from "./activity"
 import { type AgentBoardBoard, type AgentBoardCard } from "./api"
 import { IssueComposer, type ComposerDraft, type ComposerSubmit } from "./issue-composer"
-import { extractLabels } from "./issue-utils"
+import { extractLabels, issueTypeMeta } from "./issue-utils"
 import { formatRelative } from "./time-utils"
 import {
   cardSummary,
+  closedBadgeClass,
   COLUMN_ACCENT,
   COLUMN_ICON,
   issueIDTone,
-  priorityTone,
+  priorityClass,
   type ColumnAccent,
 } from "./ui-tokens"
 
 const RUNNING = new Set(["queued", "running"])
 
 const COLUMN_HINT: Record<AgentBoardBoard["columns"][number]["id"], string> = {
-  ready: "Unblocked and ready to start",
+  open: "Open work",
   running: "Currently assigned to sessions",
   needs_review: "Waiting on a human decision",
   blocked: "Waiting on dependencies",
@@ -133,6 +134,7 @@ function BoardListRow(props: {
   const last = () => latestEvent(props.card)
   const summary = () => cardSummary(props.card)
   const labels = () => extractLabels(props.card)
+  const typeMeta = () => issueTypeMeta(props.card.issue)
   const latestText = () => {
     const event = last()
     if (event) return eventLabel(event.type)
@@ -207,20 +209,30 @@ function BoardListRow(props: {
         </div>
 
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          <Show when={props.blockerCount > 0}>
-            <span
-              class="inline-flex items-center gap-1 rounded bg-[#da3633]/12 px-1.5 py-0.5 text-10-semibold text-[#cf222e] ring-1 ring-inset ring-[#f85149]/40 [&_[data-component=icon]]:text-inherit"
-              title={`${props.blockerCount} blocking dependenc${props.blockerCount === 1 ? "y" : "ies"}`}
-            >
-              <Icon name="circle-ban-sign" class="size-3" />
-              {props.blockerCount}
-            </span>
+          <Show when={typeMeta()}>
+            {(meta) => (
+              <span
+                class={`hidden shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset sm:inline-flex [&_[data-component=icon]]:text-inherit ${meta().tone} ${closedBadgeClass(props.card.column === "closed")}`}
+              >
+                <Icon name={meta().icon} class="size-3 text-inherit" />
+                {meta().label}
+              </span>
+            )}
           </Show>
           <Show when={props.card.issue.priority !== undefined}>
             <span
-              class={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(props.card.issue.priority)}`}
+              class={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityClass(props.card.issue.priority, props.card.column === "closed")}`}
             >
               P{props.card.issue.priority}
+            </span>
+          </Show>
+          <Show when={props.blockerCount > 0}>
+            <span
+              class="inline-flex items-center gap-1 rounded bg-[#da3633]/12 px-1.5 py-0.5 text-10-semibold text-[#cf222e] ring-1 ring-inset ring-[#f85149]/40 [&_[data-component=icon]]:text-inherit"
+              title={`Blocked by ${props.blockerCount} issue${props.blockerCount === 1 ? "" : "s"}`}
+            >
+              <Icon name="lock" class="size-3 text-inherit" />
+              {props.blockerCount}
             </span>
           </Show>
           <Show when={latestText()}>

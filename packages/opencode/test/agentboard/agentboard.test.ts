@@ -4,7 +4,7 @@ import { columnForIssue } from "../../src/agentboard/board"
 import { beadsStatusForColumn } from "../../src/agentboard/moves"
 import { createAgentBoardPrompt } from "../../src/agentboard/prompt"
 import { queuedRunIsStale, runningRunCanBeReconciled } from "../../src/agentboard/reconcile"
-import { normalizeStartReadyLimit } from "../../src/agentboard/scheduler"
+import { normalizeStartOpenLimit } from "../../src/agentboard/scheduler"
 import type { AgentBoardRun } from "../../src/agentboard/types"
 
 function run(status: AgentBoardRun["status"]): AgentBoardRun {
@@ -99,13 +99,30 @@ describe("agentboard", () => {
         type: "blocks",
       },
     ])
+    expect(
+      dependenciesFromRawIssues([
+        {
+          id: "AB-2",
+          title: "Related work",
+          raw: {
+            dependencies: ["AB-1"],
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        fromIssueID: "AB-2",
+        toIssueID: "AB-1",
+        type: "dependency",
+      },
+    ])
   })
 
   test("generates a scoped agent prompt from an issue", () => {
     const prompt = createAgentBoardPrompt({
       id: "task-456",
       title: "Add review action",
-      status: "ready",
+      status: "open",
       priority: 1,
       description: "Let a user request changes from the board.",
       raw: { id: "task-456", title: "Add review action" },
@@ -118,7 +135,7 @@ describe("agentboard", () => {
   })
 
   test("maps board drop targets to Beads statuses", () => {
-    expect(beadsStatusForColumn("ready")).toBe("open")
+    expect(beadsStatusForColumn("open")).toBe("open")
     expect(beadsStatusForColumn("running")).toBe("in_progress")
     expect(beadsStatusForColumn("closed")).toBe("closed")
     expect(beadsStatusForColumn("needs_review")).toBe("in_progress")
@@ -126,22 +143,22 @@ describe("agentboard", () => {
   })
 
   test("projects run lifecycle over Beads status when needed", () => {
-    expect(columnForIssue("ready", run("queued"))).toBe("running")
-    expect(columnForIssue("ready", run("running"))).toBe("running")
+    expect(columnForIssue("open", run("queued"))).toBe("running")
+    expect(columnForIssue("open", run("running"))).toBe("running")
     expect(columnForIssue("running", run("needs_review"))).toBe("needs_review")
     expect(columnForIssue("running", run("failed"))).toBe("needs_review")
-    expect(columnForIssue("ready", run("needs_review"))).toBe("needs_review")
-    expect(columnForIssue("ready", run("failed"))).toBe("needs_review")
+    expect(columnForIssue("open", run("needs_review"))).toBe("needs_review")
+    expect(columnForIssue("open", run("failed"))).toBe("needs_review")
     expect(columnForIssue("running", run("done"))).toBe("closed")
     expect(columnForIssue("blocked", run("cancelled"))).toBe("blocked")
   })
 
   test("caps bulk start concurrency", () => {
-    expect(normalizeStartReadyLimit(undefined)).toBe(3)
-    expect(normalizeStartReadyLimit("bad")).toBe(3)
-    expect(normalizeStartReadyLimit(0)).toBe(1)
-    expect(normalizeStartReadyLimit(2.9)).toBe(2)
-    expect(normalizeStartReadyLimit(20)).toBe(5)
+    expect(normalizeStartOpenLimit(undefined)).toBe(3)
+    expect(normalizeStartOpenLimit("bad")).toBe(3)
+    expect(normalizeStartOpenLimit(0)).toBe(1)
+    expect(normalizeStartOpenLimit(2.9)).toBe(2)
+    expect(normalizeStartOpenLimit(20)).toBe(5)
   })
 
   test("only reconciles stale active runs", () => {

@@ -49,12 +49,12 @@ export function AgentBoardRoutes(input: { worktree: string }) {
         message: latest ? "Moved to Needs Review from the board" : "Moved to Needs Review manually from the board",
       })
     }
-    if (latest && column === "ready" && (latest.status === "needs_review" || latest.status === "failed")) {
+    if (latest && column === "open" && (latest.status === "needs_review" || latest.status === "failed")) {
       AgentBoardStore.updateRun(latest.id, { status: "cancelled", ended: Date.now() })
       AgentBoardStore.addRunEvent({
         runID: latest.id,
         type: "cancelled",
-        message: "Returned to Ready from the board",
+        message: "Returned to Open from the board",
       })
     }
     if (latest && column === "closed" && latest.status !== "done") {
@@ -165,10 +165,16 @@ export function AgentBoardRoutes(input: { worktree: string }) {
       }),
     )
     .post("/cards/:issueID/run", async (c) => handle(c, () => AgentBoardRuns.start(worktree, c.req.param("issueID"))))
+    .post("/runs/start-open", async (c) =>
+      handle(c, async () => {
+        const body = z.object({ limit: z.number().optional() }).parse(await c.req.json().catch(() => ({})))
+        return AgentBoardRuns.startOpen(worktree, body)
+      }),
+    )
     .post("/runs/start-ready", async (c) =>
       handle(c, async () => {
         const body = z.object({ limit: z.number().optional() }).parse(await c.req.json().catch(() => ({})))
-        return AgentBoardRuns.startReady(worktree, body)
+        return AgentBoardRuns.startOpen(worktree, body)
       }),
     )
     .post("/cards/:issueID/status", async (c) =>
@@ -176,7 +182,10 @@ export function AgentBoardRoutes(input: { worktree: string }) {
         const body = z
           .object({
             status: z.string().optional(),
-            column: z.enum(["blocked", "ready", "running", "needs_review", "closed"]).optional(),
+            column: z
+              .enum(["blocked", "open", "ready", "running", "needs_review", "closed"])
+              .transform((value) => (value === "ready" ? "open" : value))
+              .optional(),
           })
           .parse(await c.req.json())
         if (body.column) return moveCard(c.req.param("issueID"), body.column)

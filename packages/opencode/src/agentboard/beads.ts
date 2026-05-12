@@ -118,7 +118,23 @@ function dependencyID(input: Record<string, unknown>, keys: string[]) {
   }
 }
 
-export function normalizeDependency(input: BeadsRawDependency): import("./types").AgentBoardDependency | undefined {
+function normalizeDependencyType(input: BeadsRawDependency, fallback = "blocks") {
+  const raw =
+    stringValue(input.type) ??
+    stringValue(input.dependency_type) ??
+    stringValue(input.kind) ??
+    stringValue(input.relation)
+  const normalized = raw?.toLowerCase().replaceAll("_", "-")
+  if (normalized === "parent-child") return "parent-child"
+  if (normalized === "child" || normalized === "parent") return "parent-child"
+  if (normalized === "blocks" || normalized === "blocked-by" || normalized === "blocker") return "blocks"
+  return fallback
+}
+
+export function normalizeDependency(
+  input: BeadsRawDependency,
+  fallbackType = "blocks",
+): import("./types").AgentBoardDependency | undefined {
   const fromIssueID = dependencyID(input, [
     "from_id",
     "from",
@@ -142,12 +158,7 @@ export function normalizeDependency(input: BeadsRawDependency): import("./types"
   return {
     fromIssueID,
     toIssueID,
-    type:
-      stringValue(input.type) ??
-      stringValue(input.dependency_type) ??
-      stringValue(input.kind) ??
-      stringValue(input.relation) ??
-      "blocks",
+    type: normalizeDependencyType(input, fallbackType),
   }
 }
 
@@ -177,21 +188,21 @@ export function dependenciesFromRawIssues(issues: import("./types").BeadsIssue[]
   for (const issue of issues) {
     const raw = issue.raw
     for (const id of stringArrayValue(raw.depends_on)) add(relationFromIssue(issue, id, "blocks"))
-    for (const id of stringArrayValue(raw.dependencies)) add(relationFromIssue(issue, id, "blocks"))
+    for (const id of stringArrayValue(raw.dependencies)) add(relationFromIssue(issue, id, "dependency"))
     for (const id of stringArrayValue(raw.blocked_by)) add(relationFromIssue(issue, id, "blocks"))
     for (const id of stringArrayValue(raw.blocks)) add(relationToIssue(issue, id, "blocks"))
     for (const id of stringArrayValue(raw.children)) add(relationToIssue(issue, id, "parent-child"))
     const parent = stringValue(raw.parent) ?? stringValue(raw.parent_id)
     if (parent) add(relationFromIssue(issue, parent, "parent-child"))
     const discoveredFrom = stringValue(raw.discovered_from) ?? stringValue(raw.discovered_from_id)
-    if (discoveredFrom) add(relationFromIssue(issue, discoveredFrom, "discovered-from"))
+    if (discoveredFrom) add(relationFromIssue(issue, discoveredFrom, "dependency"))
     for (const value of objectArrayValue(raw.dependencies)) {
       const toIssueID = dependencyID(value, ["to_id", "to", "depends_on_id", "dependency_id", "dependency", "blocker_id", "parent_id", "id"])
       const normalized = normalizeDependency({
         issue_id: issue.id,
         ...value,
         to_id: stringValue(value.to_id) ?? toIssueID,
-      } as BeadsRawDependency)
+      } as BeadsRawDependency, "dependency")
       if (normalized) output.push(normalized)
     }
   }
@@ -222,7 +233,7 @@ export const Beads = {
   async listBlocked(cwd: string) {
     return (await runBdJson<BeadsRawIssue[]>(["blocked", "--json"], { cwd })).map(normalizeIssue).filter((x) => x.id)
   },
-  async listReady(cwd: string) {
+  async listOpen(cwd: string) {
     return (await runBdJson<BeadsRawIssue[]>(["ready", "--limit", "1000", "--json"], { cwd }))
       .map(normalizeIssue)
       .filter((x) => x.id)
@@ -253,7 +264,11 @@ export const Beads = {
         { cwd },
       )
       const records = Array.isArray(dependencies) ? dependencies : Array.isArray(dependencies.dependencies) ? dependencies.dependencies : []
-      output.push(...records.map(normalizeDependency).filter((dependency): dependency is import("./types").AgentBoardDependency => !!dependency))
+      output.push(
+        ...records
+          .map((record) => normalizeDependency(record))
+          .filter((dependency): dependency is import("./types").AgentBoardDependency => !!dependency),
+      )
     }
     return output
   },

@@ -3,15 +3,15 @@ import type { AgentBoardBoard, AgentBoardCard } from "./api"
 import { buildAgentBoardGraph } from "./graph-state"
 
 const foundation: AgentBoardCard = {
-  column: "ready",
+  column: "open",
   issue: { id: "AB-1", title: "Foundation", priority: 0, raw: {} },
   artifacts: [],
   events: [],
 }
 
 const dependent: AgentBoardCard = {
-  column: "blocked",
-  issue: { id: "AB-2", title: "Dependent", priority: 1, raw: {} },
+  column: "open",
+  issue: { id: "AB-2", title: "Dependent", priority: 1, blocked: true, raw: {} },
   artifacts: [],
   events: [],
 }
@@ -25,8 +25,7 @@ function board(): AgentBoardBoard {
       positions: [],
     },
     columns: [
-      { id: "blocked", title: "Blocked", cards: [dependent] },
-      { id: "ready", title: "Ready", cards: [foundation] },
+      { id: "open", title: "Open", cards: [dependent, foundation] },
       { id: "running", title: "Running", cards: [] },
       { id: "needs_review", title: "Needs Review", cards: [] },
       { id: "closed", title: "Closed", cards: [] },
@@ -51,6 +50,17 @@ describe("agentboard graph state", () => {
     )
   })
 
+  test("only blocking dependencies count as blocked", () => {
+    const input = board()
+    input.graph.dependencies = [
+      { fromIssueID: "AB-2", toIssueID: "AB-1", type: "dependency" },
+    ]
+
+    const graph = buildAgentBoardGraph(input)
+
+    expect(graph.nodes.find((node) => node.id === "AB-2")?.blockedBy).toBe(0)
+  })
+
   test("ignores saved graph positions in base layout", () => {
     const input = board()
     input.graph.positions = [{ issueID: "AB-2", x: 500, y: 240, pinned: true }]
@@ -68,7 +78,7 @@ describe("agentboard graph state", () => {
     const cards = Array.from({ length: 130 }, (_, index): AgentBoardCard => {
       const id = `AB-${index + 1}`
       return {
-        column: "ready",
+        column: "open",
         issue: { id, title: id, raw: {} },
         artifacts: [],
         events: [],
@@ -79,8 +89,7 @@ describe("agentboard graph state", () => {
       generatedAt: 1,
       graph: { dependencies: [], positions: [] },
       columns: [
-        { id: "blocked", title: "Blocked", cards: [] },
-        { id: "ready", title: "Ready", cards },
+        { id: "open", title: "Open", cards },
         { id: "running", title: "Running", cards: [] },
         { id: "needs_review", title: "Needs Review", cards: [] },
         { id: "closed", title: "Closed", cards: [] },

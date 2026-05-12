@@ -2,12 +2,14 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { For, Show } from "solid-js"
 import { eventLabel } from "./activity"
 import { type AgentBoardBoard, type AgentBoardCard } from "./api"
+import { issueTypeMeta } from "./issue-utils"
 import {
   cardSummary,
+  closedBadgeClass,
   COLUMN_ACCENT,
   COLUMN_ICON,
   issueIDTone,
-  priorityTone,
+  priorityClass,
   statusLabel,
   statusTone,
   visibleStatus,
@@ -19,13 +21,10 @@ function latestEvent(card: AgentBoardCard) {
   return card.events.at(-1)
 }
 
-function canDragCard(card: AgentBoardCard) {
-  return card.column !== "blocked"
-}
-
 export function BoardCardContent(props: {
   card: AgentBoardCard
   busy: boolean
+  blockerCount?: number
   preview?: boolean
   onChat?: () => void
   onAdvance?: () => void
@@ -34,6 +33,8 @@ export function BoardCardContent(props: {
   const last = () => latestEvent(props.card)
   const accent = () => COLUMN_ACCENT[props.card.column]
   const status = () => visibleStatus(props.card)
+  const typeMeta = () => issueTypeMeta(props.card.issue)
+  const showDependencyFooter = () => (props.blockerCount ?? 0) > 0 && !props.preview
   const isLive = () => {
     const value = run()
     return !!value && RUNNING.has(value.status)
@@ -50,11 +51,28 @@ export function BoardCardContent(props: {
         <Show
           when={isLive()}
           fallback={
-            <span
-              class={`shrink-0 rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${statusTone(status())}`}
+            <Show
+              when={typeMeta()}
+              fallback={
+                <span
+                  class={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset [&_[data-component=icon]]:text-inherit ${statusTone(status())}`}
+                >
+                  <Show when={status() === "blocked"}>
+                    <Icon name="lock" class="mr-1 size-3 text-inherit" />
+                  </Show>
+                  {statusLabel(status())}
+                </span>
+              }
             >
-              {statusLabel(status())}
-            </span>
+              {(meta) => (
+                <span
+                  class={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset [&_[data-component=icon]]:text-inherit ${meta().tone} ${closedBadgeClass(props.card.column === "closed")}`}
+                >
+                  <Icon name={meta().icon} class="mr-1 size-3 text-inherit" />
+                  {meta().label}
+                </span>
+              )}
+            </Show>
           }
         >
           <span class="flex shrink-0 items-center rounded-full bg-[#9e6a03]/14 px-1.5 py-0.5 text-10-semibold text-text-strong ring-1 ring-inset ring-[#d29922]/45">
@@ -63,7 +81,7 @@ export function BoardCardContent(props: {
         </Show>
         <Show when={props.card.issue.priority !== undefined}>
           <span
-            class={`shrink-0 rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(props.card.issue.priority)}`}
+            class={`shrink-0 rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityClass(props.card.issue.priority, props.card.column === "closed")}`}
           >
             P{props.card.issue.priority}
           </span>
@@ -101,13 +119,24 @@ export function BoardCardContent(props: {
       </Show>
 
       <div class="mt-3 flex min-h-8 items-center justify-between gap-2 border-t border-border-weaker-base/50 pt-2">
-        <span class={`max-w-[10rem] truncate ${issueIDTone()}`}>{props.card.issue.id}</span>
+        <div class="flex min-w-0 items-center gap-1.5">
+          <span class={`max-w-[10rem] truncate ${issueIDTone()}`}>{props.card.issue.id}</span>
+          <Show when={showDependencyFooter()}>
+            <span
+              class="inline-flex size-6 shrink-0 items-center justify-center rounded bg-[#da3633]/12 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-1 ring-inset ring-[#f85149]/40 [&_[data-component=icon]]:text-inherit"
+              title={`Blocked by ${props.blockerCount} issue${props.blockerCount === 1 ? "" : "s"}`}
+              aria-label={`Blocked by ${props.blockerCount} issue${props.blockerCount === 1 ? "" : "s"}`}
+            >
+              <Icon name="lock" class="size-3 shrink-0 text-inherit" />
+            </span>
+          </Show>
+        </div>
         <Show when={!props.preview}>
           <div class="flex h-6 min-w-[3.75rem] shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-            <Show when={props.card.column === "ready" && props.onChat}>
+            <Show when={props.card.column === "open" && props.onChat}>
               <button
                 type="button"
-                class="inline-flex h-6 items-center gap-1 rounded bg-primary px-2 text-10-semibold uppercase tracking-wide text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                class="inline-flex h-6 items-center gap-1 rounded bg-primary px-2 text-10-semibold uppercase tracking-wide text-primary-foreground transition-[box-shadow,opacity,transform] duration-150 hover:opacity-90 hover:shadow-xs-border-base active:translate-y-px disabled:opacity-50"
                 disabled={props.busy}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
@@ -127,19 +156,6 @@ export function BoardCardContent(props: {
   )
 }
 
-export function BlockedStripeOverlay(props: { subtle?: boolean }) {
-  return (
-    <div
-      class="pointer-events-none absolute inset-0"
-      style={{
-        "background-image": `repeating-linear-gradient(135deg, rgba(248, 81, 73, ${
-          props.subtle ? "0.035" : "0.075"
-        }) 0px, rgba(248, 81, 73, ${props.subtle ? "0.035" : "0.075"}) 1px, transparent 1px, transparent 9px)`,
-      }}
-    />
-  )
-}
-
 export function BoardCard(props: {
   card: AgentBoardCard
   selected: boolean
@@ -150,9 +166,9 @@ export function BoardCard(props: {
   onChat: () => void
   onAdvance: () => void
   onDragStart: (event: PointerEvent, card: AgentBoardCard) => void
+  blockerCount?: number
 }) {
   const run = () => props.card.latestRun
-  const draggable = () => canDragCard(props.card)
   const isLive = () => {
     const value = run()
     return !!value && RUNNING.has(value.status)
@@ -166,10 +182,9 @@ export function BoardCard(props: {
       props.dragging,
     "hover:border-border-base hover:bg-surface-raised-base/80 hover:shadow-xs-border-hover": !props.boardDragging,
     "pointer-events-none": props.boardDragging && !props.dragging,
-    "cursor-grab active:cursor-grabbing": draggable(),
-    "cursor-default": !draggable(),
+    "cursor-grab active:cursor-grabbing": true,
   })
-  return draggable() ? (
+  return (
     <article
       data-agentboard-card={props.card.issue.id}
       role="button"
@@ -188,35 +203,14 @@ export function BoardCard(props: {
         props.onSelect()
       }}
     >
-      <Show when={props.card.column === "blocked"}>
-        <BlockedStripeOverlay />
-      </Show>
       <div class="relative">
-        <BoardCardContent card={props.card} busy={props.busy} onChat={props.onChat} onAdvance={props.onAdvance} />
-      </div>
-    </article>
-  ) : (
-    <article
-      data-agentboard-card={props.card.issue.id}
-      role="button"
-      tabindex="0"
-      aria-grabbed={false}
-      aria-label={`${props.card.issue.id} - ${props.card.issue.title}. Blocked by dependencies.`}
-      title="Blocked by dependencies. Resolve the dependency chain in Beads to move it."
-      class={cardClass}
-      classList={cardClassList()}
-      onClick={props.onSelect}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return
-        event.preventDefault()
-        props.onSelect()
-      }}
-    >
-      <Show when={props.card.column === "blocked"}>
-        <BlockedStripeOverlay />
-      </Show>
-      <div class="relative">
-        <BoardCardContent card={props.card} busy={props.busy} onChat={props.onChat} onAdvance={props.onAdvance} />
+        <BoardCardContent
+          card={props.card}
+          busy={props.busy}
+          blockerCount={props.blockerCount}
+          onChat={props.onChat}
+          onAdvance={props.onAdvance}
+        />
       </div>
     </article>
   )
@@ -267,7 +261,7 @@ export function ColumnPreview(props: {
           {props.column.cards.length}
         </span>
       </div>
-      <div class="min-h-0 flex-1 space-y-2.5 overflow-hidden px-2.5 pb-4">
+      <div class="min-h-0 flex-1 space-y-3 overflow-hidden px-3 pb-4">
         <For each={props.column.cards}>
           {(card) => (
             <div class="relative overflow-hidden rounded-md border border-transparent bg-background-base p-3.5 text-left shadow-xs-border-base">

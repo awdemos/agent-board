@@ -55,7 +55,7 @@ import {
   type BeadsIssue,
   createAgentBoardClient,
 } from "./api"
-import { BOARD_COLUMN_IDS, canMoveCardTo, findCard, isBoardColumnID, moveCardOnBoard } from "./board-state"
+import { BOARD_COLUMN_IDS, canMoveCardTo, findCard, isBoardColumnID, moveCardOnBoard, normalizeBoard } from "./board-state"
 import { DetailDrawer, type DrawerTab } from "./detail-drawer"
 import { GraphMode, type AgentBoardViewMode } from "./graph-view"
 import { IssueComposer, type ComposerDraft, type ComposerSubmit } from "./issue-composer"
@@ -185,7 +185,6 @@ export default function AgentBoardPage() {
   })
   const allCards = createMemo(() => board()?.columns.flatMap((column) => column.cards) ?? [])
   const searchableCards = createMemo(() => allCards().filter((card) => issueType(card.issue) !== "epic"))
-  const readyCards = createMemo(() => board()?.columns.find((column) => column.id === "ready")?.cards ?? [])
   const isBoardEmpty = createMemo(() => allCards().length === 0)
   const knownLabels = createMemo(() => {
     const counts = new Map<string, number>()
@@ -369,7 +368,7 @@ export default function AgentBoardPage() {
   }
 
   function setOrderedBoard(next: AgentBoardBoard) {
-    const ordered = applyBoardOrder(next, boardOrder())
+    const ordered = applyBoardOrder(normalizeBoard(next), boardOrder())
     processTransitions(ordered)
     setBoard(ordered)
     return ordered
@@ -547,7 +546,7 @@ export default function AgentBoardPage() {
       showToast({
         variant: "success",
         title: `Filed ${issueID || "issue"}`,
-        description: "Stays in Ready until you open a chat or move it.",
+        description: "Stays in Open until you open a chat or move it.",
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -583,7 +582,7 @@ export default function AgentBoardPage() {
       const element = document.querySelector<HTMLElement>(`[data-agentboard-column="${CSS.escape(columnID)}"]`)
       const rect = element?.getBoundingClientRect()
       setActiveColumnDrag(columnID)
-      setDragSnapshot(board())
+      setDragSnapshot(filteredBoard())
       setActiveDrag(undefined)
       setActiveDragOrigin(undefined)
       setActiveDropTarget(undefined)
@@ -626,7 +625,7 @@ export default function AgentBoardPage() {
       columns,
     }
     setBoardOrder(nextOrder)
-    const current = board()
+    const current = filteredBoard()
     if (current) setBoard(applyBoardOrder(current, nextOrder))
     return nextOrder
   }
@@ -1164,8 +1163,14 @@ export default function AgentBoardPage() {
                         >
                           <DragDropSensors />
                           <div class="flex h-full flex-col">
-                            <div class="min-h-0 flex-1 overflow-x-auto p-4">
-                              <div class="grid h-full min-w-[1200px] grid-cols-5 gap-3">
+                            <div class="min-h-0 flex-1 overflow-x-auto p-[18px]">
+                              <div
+                                class="grid h-full gap-3.5"
+                                style={{
+                                  "grid-template-columns": `repeat(${Math.max(filteredColumns().length, 1)}, minmax(280px, 1fr))`,
+                                  "min-width": `${Math.max(1120, filteredColumns().length * 296)}px`,
+                                }}
+                              >
                                 <For each={filteredColumns()}>
                                   {(column) => (
                                     <>
@@ -1183,6 +1188,7 @@ export default function AgentBoardPage() {
                                       </Show>
                                       <BoardColumn
                                         column={column}
+                                        dependencies={current().graph.dependencies}
                                         selectedID={selectedID()}
                                         busy={busy()}
                                         activeDrag={activeDrag()}

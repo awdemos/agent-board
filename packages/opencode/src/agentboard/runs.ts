@@ -7,7 +7,7 @@ import { Beads } from "./beads"
 import { AgentBoardEvents } from "./events"
 import { collectRunArtifacts } from "./artifacts"
 import { createAgentBoardPrompt } from "./prompt"
-import { normalizeStartReadyLimit } from "./scheduler"
+import { normalizeStartOpenLimit } from "./scheduler"
 import { AgentBoardStore } from "./store"
 import type { AgentBoardRun } from "./types"
 
@@ -81,7 +81,7 @@ export const AgentBoardRuns = {
       emit(failed)
       return failed
     }
-    log(run.id, "queued", "Queued from Ready")
+    log(run.id, "queued", "Queued from Open")
     log(run.id, "lease_acquired", "Acquired issue lease", { resource: lease })
     emit(run)
 
@@ -138,16 +138,16 @@ export const AgentBoardRuns = {
 
     return AgentBoardStore.getRun(run.id)!
   },
-  async startReady(worktree: string, input?: { limit?: number }) {
+  async startOpen(worktree: string, input?: { limit?: number }) {
     const project = AgentBoardStore.upsertProject({ worktree })
-    const limit = normalizeStartReadyLimit(input?.limit)
-    const ready = await Beads.listReady(worktree)
+    const limit = normalizeStartOpenLimit(input?.limit)
+    const open = await Beads.listOpen(worktree)
     const latest = AgentBoardStore.latestRunByIssue(project.id)
     const started: AgentBoardRun[] = []
     const skipped: Array<{ issueID: string; reason: string }> = []
     const failed: Array<{ issueID: string; error: string }> = []
 
-    for (const issue of ready) {
+    for (const issue of open) {
       if (started.length >= limit) break
       const run = latest.get(issue.id)
       if (run?.status === "queued" || run?.status === "running") {
