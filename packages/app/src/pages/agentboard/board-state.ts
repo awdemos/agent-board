@@ -1,12 +1,13 @@
 import type { AgentBoardBoard, AgentBoardCard, AgentBoardColumnID } from "./api"
 
-export const BOARD_COLUMN_IDS = ["open", "running", "needs_review", "closed"] as const
+export const BOARD_COLUMN_IDS = ["open", "in_progress", "needs_review", "closed"] as const
 
 const BOARD_COLUMN_ID_SET = new Set<string>(BOARD_COLUMN_IDS)
 
 export function normalizeBoardColumnID(value: string | undefined): AgentBoardColumnID | undefined {
   if (value === "ready") return "open"
   if (value === "blocked") return "open"
+  if (value === "running") return "in_progress"
   return value && BOARD_COLUMN_ID_SET.has(value) ? (value as AgentBoardColumnID) : undefined
 }
 
@@ -21,13 +22,13 @@ export function allCards(board?: AgentBoardBoard) {
 export function normalizeBoard(board: AgentBoardBoard): AgentBoardBoard {
   const columns = new Map<AgentBoardColumnID, AgentBoardBoard["columns"][number]>()
   for (const id of BOARD_COLUMN_IDS) {
-    columns.set(id, { id, title: id === "needs_review" ? "Needs Review" : id.charAt(0).toUpperCase() + id.slice(1), cards: [] })
+    columns.set(id, { id, title: boardColumnTitle(id), cards: [] })
   }
   for (const column of board.columns) {
     const id = normalizeBoardColumnID(column.id)
     if (!id) continue
     const current = columns.get(id)
-    const title = id === "open" ? "Open" : column.title
+    const title = boardColumnTitle(id)
     const legacyBlockedColumn = column.id === "blocked"
     const cards = column.cards.map((card) => ({
       ...card,
@@ -42,6 +43,14 @@ export function normalizeBoard(board: AgentBoardBoard): AgentBoardBoard {
   }
 }
 
+export function boardColumnTitle(id: AgentBoardColumnID) {
+  if (id === "open") return "Open"
+  if (id === "in_progress") return "In Progress"
+  if (id === "needs_review") return "Needs Review"
+  if (id === "closed") return "Closed"
+  return "Blocked"
+}
+
 export function findCard(board: AgentBoardBoard | undefined, issueID: string | undefined) {
   if (!issueID) return
   return allCards(board).find((card) => card.issue.id === issueID)
@@ -54,10 +63,10 @@ export function canMoveCardTo(card: AgentBoardCard, target: AgentBoardColumnID, 
   if (target === "blocked") {
     return { ok: false, reason: "Blocked is derived from Beads dependencies and cannot be set manually." }
   }
-  if ((card.latestRun?.status === "queued" || card.latestRun?.status === "running") && target !== "running") {
+  if ((card.latestRun?.status === "queued" || card.latestRun?.status === "running") && target !== "in_progress") {
     return { ok: false, reason: "Cancel the active OpenCode run before moving this card." }
   }
-  if (target === "running" && (card.latestRun?.status === "needs_review" || card.latestRun?.status === "failed")) {
+  if (target === "in_progress" && (card.latestRun?.status === "needs_review" || card.latestRun?.status === "failed")) {
     return { ok: false, reason: "Use Request Changes to resume an OpenCode review run." }
   }
   return { ok: true, reason: undefined }
@@ -65,7 +74,7 @@ export function canMoveCardTo(card: AgentBoardCard, target: AgentBoardColumnID, 
 
 function issueStatusForColumn(column: AgentBoardColumnID) {
   if (column === "open") return "open"
-  if (column === "running" || column === "needs_review") return "in_progress"
+  if (column === "in_progress" || column === "needs_review") return "in_progress"
   if (column === "closed") return "closed"
   return undefined
 }

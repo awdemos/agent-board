@@ -29,7 +29,7 @@ export function AgentBoardRoutes(input: { worktree: string }) {
   async function moveCard(issueID: string, column: AgentBoardColumnID) {
     const project = AgentBoardStore.upsertProject({ worktree })
     const latest = AgentBoardStore.latestRunByIssue(project.id).get(issueID)
-    if (latest && (latest.status === "queued" || latest.status === "running") && column !== "running") {
+    if (latest && (latest.status === "queued" || latest.status === "running") && column !== "in_progress") {
       throw new Error("Cancel the active OpenCode run before moving this card.")
     }
     const beadsStatus = beadsStatusForColumn(column)
@@ -183,8 +183,8 @@ export function AgentBoardRoutes(input: { worktree: string }) {
           .object({
             status: z.string().optional(),
             column: z
-              .enum(["blocked", "open", "ready", "running", "needs_review", "closed"])
-              .transform((value) => (value === "ready" ? "open" : value))
+              .enum(["blocked", "open", "ready", "running", "in_progress", "needs_review", "closed"])
+              .transform((value) => (value === "ready" ? "open" : value === "running" ? "in_progress" : value))
               .optional(),
           })
           .parse(await c.req.json())

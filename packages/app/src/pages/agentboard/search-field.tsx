@@ -22,7 +22,7 @@ export function SearchField(props: {
         class="h-7 w-72 rounded-md bg-surface-raised-base pl-8 pr-20 text-13-regular text-text-strong outline-none placeholder:text-text-weak focus:ring-1 focus:ring-border-strong-base"
         value={props.value}
         onInput={(event) => props.onInput(event.currentTarget.value)}
-        placeholder="Search cards"
+        placeholder="Search issues"
       />
       <div class="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1">
         <Show

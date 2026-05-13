@@ -30,7 +30,7 @@ export type AgentBoardGraph = {
 const COLUMN_RANK = {
   blocked: 0,
   open: 0,
-  running: 1,
+  in_progress: 1,
   needs_review: 2,
   closed: 3,
 }

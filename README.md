@@ -12,21 +12,23 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
 </p>
 
-**A visual workspace for coding models.**
+**A local task board, dependency graph, and review surface for coding models.**
 
 OpenCode AgentBoard is an experimental fork of [OpenCode](https://github.com/anomalyco/opencode) that turns [Beads](https://github.com/steveyegge/beads) issues into a desktop workspace for planning, reviewing, and handing work to chat.
 
 Instead of keeping every task in a long conversation, AgentBoard gives you three views of the same local issue graph:
 
-- **Board** for flow: ready, running, review, blocked, closed
+- **Board** for flow: open, in progress, needs review, closed
 - **List** for scanning a large backlog quickly
 - **Graph** for understanding dependencies before asking a model to work
+
+Blocked work stays visible as a dependency state, not a separate place where tasks disappear.
 
 > This fork is not built by, endorsed by, or affiliated with the OpenCode team.
 
 ## Why This Exists
 
-Chat is good for execution. It is not always good for seeing the whole project.
+Chat is where models execute. AgentBoard is where humans and models decide what should happen next.
 
 When a codebase has dozens or hundreds of tasks, you need to know:
 
@@ -38,18 +40,28 @@ When a codebase has dozens or hundreds of tasks, you need to know:
 
 AgentBoard keeps that work in Beads, then gives both you and the model a shared visual surface on top of it.
 
+<p align="center">
+  <img src="assets/board.png" alt="AgentBoard board view" width="900">
+</p>
+
+| Dependency Graph | Issue Drawer |
+|:-:|:-:|
+| ![Dependency Graph](assets/graph.png?raw=true) | ![Issue Drawer](assets/drawer.png?raw=true) |
+
 ## Features
 
-- **Kanban board** — Ready, Running, Needs Review, Blocked, and Closed columns backed by Beads
+- **Kanban board** — Open, In Progress, Needs Review, and Closed columns backed by Beads
 - **Dependency graph** — Zoomable graph with pan, fit, minimap, filters, manual positioning, and readable dependency arrows
 - **List view** — A dense, clean way to scan issues without moving cards around
-- **Issue drawer** — Status, priority, blockers, description, created/updated age, timeline, artifacts, and quick transitions
+- **Issue drawer** — Type, status, priority, dependencies, description, created/updated age, timeline, artifacts, raw payload, and quick transitions
 - **Chat handoff** — Open an OpenCode chat with the selected Beads issue already attached
 - **Issue creation** — Create Beads issues from the bottom composer, optionally continuing in chat
 - **Beads setup flow** — Initialize Beads from the UI or use an existing `.beads` database
 - **Local-first state** — Beads remains the source of truth for issue content, status, priority, and dependencies
 
 ## Run Locally
+
+AgentBoard is currently easiest to try as a local desktop development build.
 
 Requirements:
 
@@ -85,11 +97,21 @@ Tip: `npx skills beads` teaches any model to use Beads.
 - Load Beads issues into Board, List, and Graph views
 - Create issues from the AgentBoard composer
 - Move issues across board columns and persist status back to Beads
+- See blocked issues inline with lock indicators and dependency details
 - Reorder cards and board sections locally
-- Inspect blockers and related issues from the drawer
+- Inspect blockers, dependencies, and related issues from the drawer
 - See timeline and artifact counts when available
 - Open a chat with issue context attached
 - Persist graph node positions and use fit/minimap controls
+
+## What This Is Not
+
+- It is not a hosted service.
+- It is not a replacement for Beads.
+- It is not a replacement for OpenCode chat.
+- It is not an official OpenCode feature.
+
+AgentBoard is a local-first experiment for making model-driven coding work easier to see, steer, and review.
 
 ## Status
 
@@ -106,7 +128,7 @@ AgentBoard started after studying several agent-orchestration interfaces:
 - Beads UI for a Beads-native baseline
 - OpenCode for the desktop shell, project model, and chat runtime
 
-The rough direction was: build a Symphony-inspired workflow with a Cursor-inspired interface on top of OpenCode, using Beads as the issue substrate. The app was then iterated manually with Codex: board first, then graph, then list.
+The direction became: a Symphony-inspired workflow, a Cursor-inspired interface, OpenCode as the desktop shell, and Beads as the local issue substrate. The app was then iterated manually with Codex: board first, then graph, then list.
 
 ## Relationship To OpenCode
 

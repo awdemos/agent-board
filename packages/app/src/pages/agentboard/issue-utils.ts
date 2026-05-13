@@ -33,31 +33,31 @@ export const ISSUE_TYPE_META: Record<string, IssueTypeMeta> = {
   bug: {
     label: "Bug",
     icon: "warning",
-    tone: "bg-[#da3633]/14 text-text-strong ring-[#f85149]/45",
+    tone: "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-[#f85149]/45",
     iconClass: "text-[#f85149]",
   },
   feature: {
     label: "Feature",
     icon: "plus",
-    tone: "bg-[#238636]/14 text-text-strong ring-[#3fb950]/45",
+    tone: "bg-[#238636]/14 text-[color-mix(in_oklch,#1a7f37_62%,var(--text-strong))] ring-[#3fb950]/45",
     iconClass: "text-[#3fb950]",
   },
   task: {
     label: "Task",
     icon: "checklist",
-    tone: "bg-[#58a6ff]/14 text-text-strong ring-[#58a6ff]/45",
+    tone: "bg-[#58a6ff]/14 text-[color-mix(in_oklch,#0969da_62%,var(--text-strong))] ring-[#58a6ff]/45",
     iconClass: "text-[#58a6ff]",
   },
   chore: {
     label: "Chore",
     icon: "edit",
-    tone: "bg-[#9e6a03]/14 text-text-strong ring-[#d29922]/45",
+    tone: "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))] ring-[#d29922]/45",
     iconClass: "text-[#d29922]",
   },
   epic: {
     label: "Epic",
     icon: "branch",
-    tone: "bg-[#8957e5]/14 text-text-strong ring-[#a371f7]/45",
+    tone: "bg-[#8957e5]/14 text-[color-mix(in_oklch,#8250df_62%,var(--text-strong))] ring-[#a371f7]/45",
     iconClass: "text-[#a371f7]",
   },
 }

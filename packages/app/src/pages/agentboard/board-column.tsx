@@ -26,14 +26,14 @@ const COLUMN_DRAG_PREFIX = "agentboard-column:"
 const COLUMN_EMPTY: Record<AgentBoardColumnID, { idle: string; managed?: string }> = {
   blocked: { idle: "Nothing blocked" },
   open: { idle: "No open cards" },
-  running: { idle: "No active runs" },
+  in_progress: { idle: "No active runs" },
   needs_review: { idle: "Nothing to review" },
   closed: { idle: "No closed work yet" },
 }
 
 const ADVANCEMENT: Partial<Record<AgentBoardColumnID, AgentBoardColumnID>> = {
-  open: "running",
-  running: "needs_review",
+  open: "in_progress",
+  in_progress: "needs_review",
   needs_review: "closed",
 }
 
@@ -96,7 +96,7 @@ export function BoardColumn(props: {
       }}
     >
       <header
-        class="sticky top-0 z-10 flex shrink-0 items-center gap-2 px-3 py-2 transition-colors duration-150"
+        class="sticky top-0 z-10 flex shrink-0 items-center gap-2 px-3 pb-1 pt-3 transition-colors duration-150"
         classList={{
           [accent().drop]: dragging() && targeted(),
           "cursor-grab active:cursor-grabbing": !props.activeDrag,
@@ -117,7 +117,7 @@ export function BoardColumn(props: {
         </span>
       </header>
       <ScrollView class="relative z-10 min-h-0 flex-1" data-scrollable>
-        <div class="space-y-3 px-3 py-2.5">
+        <div class="space-y-3 px-3 pb-2.5 pt-2">
           <Show
             when={props.column.cards.length > 0}
             fallback={

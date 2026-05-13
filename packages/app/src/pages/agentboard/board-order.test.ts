@@ -18,7 +18,7 @@ function board(): AgentBoardBoard {
     graph: { dependencies: [], positions: [] },
     columns: [
       { id: "open", title: "Open", cards: [card("A"), card("B"), card("C")] },
-      { id: "running", title: "Running", cards: [card("D")] },
+      { id: "in_progress", title: "In Progress", cards: [card("D")] },
       { id: "needs_review", title: "Needs Review", cards: [] },
       { id: "closed", title: "Closed", cards: [] },
     ],
@@ -27,8 +27,8 @@ function board(): AgentBoardBoard {
 
 describe("agentboard board order", () => {
   test("normalizes invalid and duplicate columns", () => {
-    expect(normalizeColumnOrder(["running", "open", "running", "unknown" as never])).toEqual([
-      "running",
+    expect(normalizeColumnOrder(["running" as never, "open", "in_progress", "unknown" as never])).toEqual([
+      "in_progress",
       "open",
       "needs_review",
       "closed",
@@ -37,12 +37,12 @@ describe("agentboard board order", () => {
 
   test("applies saved column and card order while preserving unknown cards", () => {
     const ordered = applyBoardOrder(board(), {
-      columns: ["running", "open", "closed", "blocked", "needs_review"],
+      columns: ["running" as never, "open", "closed", "blocked", "needs_review"],
       cards: { open: ["C", "A"] },
     })
 
     expect(ordered.columns.map((column) => column.id)).toEqual([
-      "running",
+      "in_progress",
       "open",
       "closed",
       "needs_review",
@@ -55,11 +55,11 @@ describe("agentboard board order", () => {
   })
 
   test("captures order from current board", () => {
-    const order = orderFromBoard(board(), ["open", "running"])
+    const order = orderFromBoard(board(), ["open", "in_progress"])
 
-    expect(order.columns).toEqual(["open", "running", "needs_review", "closed"])
+    expect(order.columns).toEqual(["open", "in_progress", "needs_review", "closed"])
     expect(order.cards.open).toEqual(["A", "B", "C"])
-    expect(order.cards.running).toEqual(["D"])
+    expect(order.cards.in_progress).toEqual(["D"])
   })
 
   test("moves array items before another item or to the end", () => {

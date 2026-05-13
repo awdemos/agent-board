@@ -7,7 +7,7 @@ import { COLUMN_ACCENT } from "./ui-tokens"
 const MINIMAP_STATUS_FILL: Record<AgentBoardColumnID, string> = {
   blocked: "#ff7b72",
   open: "#7ee787",
-  running: "#f2cc60",
+  in_progress: "#f2cc60",
   needs_review: "#79c0ff",
   closed: "#d2a8ff",
 }

@@ -1,7 +1,7 @@
 import type { ServerConnection } from "@/context/server"
 
 export type AgentBoardRunStatus = "queued" | "running" | "needs_review" | "done" | "cancelled" | "failed"
-export type AgentBoardColumnID = "blocked" | "open" | "running" | "needs_review" | "closed"
+export type AgentBoardColumnID = "blocked" | "open" | "in_progress" | "needs_review" | "closed"
 
 export type BeadsIssue = {
   id: string

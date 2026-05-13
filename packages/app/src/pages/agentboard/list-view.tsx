@@ -1,4 +1,5 @@
 import { Icon } from "@opencode-ai/ui/icon"
+import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { createMemo, For, Show } from "solid-js"
 import { eventLabel } from "./activity"
 import { type AgentBoardBoard, type AgentBoardCard } from "./api"
@@ -16,14 +17,6 @@ import {
 } from "./ui-tokens"
 
 const RUNNING = new Set(["queued", "running"])
-
-const COLUMN_HINT: Record<AgentBoardBoard["columns"][number]["id"], string> = {
-  open: "Open work",
-  running: "Currently assigned to sessions",
-  needs_review: "Waiting on a human decision",
-  blocked: "Waiting on dependencies",
-  closed: "Done and archived",
-}
 
 export function BoardListView(props: {
   columns: AgentBoardBoard["columns"]
@@ -50,7 +43,7 @@ export function BoardListView(props: {
 
   return (
     <div class="flex h-full flex-col">
-      <div class="min-h-0 flex-1 overflow-auto">
+      <ScrollView class="min-h-0 flex-1">
         <div class="mx-auto w-full max-w-5xl px-4 py-5">
           <Show
             when={totalRows() > 0}
@@ -76,9 +69,6 @@ export function BoardListView(props: {
                         >
                           {column.cards.length}
                         </span>
-                        <span class="ml-1 hidden truncate text-11-regular text-text-weak sm:inline">
-                          {COLUMN_HINT[column.id]}
-                        </span>
                       </header>
                       <ul class="overflow-hidden rounded-lg border border-border-weaker-base bg-surface-panel">
                         <For each={column.cards}>
@@ -102,7 +92,7 @@ export function BoardListView(props: {
             </div>
           </Show>
         </div>
-      </div>
+      </ScrollView>
       <div class="shrink-0 border-t border-border-weaker-base bg-background-base px-4 py-3">
         <IssueComposer
           variant="inline"

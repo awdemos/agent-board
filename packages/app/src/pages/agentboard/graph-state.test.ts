@@ -26,7 +26,7 @@ function board(): AgentBoardBoard {
     },
     columns: [
       { id: "open", title: "Open", cards: [dependent, foundation] },
-      { id: "running", title: "Running", cards: [] },
+      { id: "in_progress", title: "In Progress", cards: [] },
       { id: "needs_review", title: "Needs Review", cards: [] },
       { id: "closed", title: "Closed", cards: [] },
     ],
@@ -90,7 +90,7 @@ describe("agentboard graph state", () => {
       graph: { dependencies: [], positions: [] },
       columns: [
         { id: "open", title: "Open", cards },
-        { id: "running", title: "Running", cards: [] },
+        { id: "in_progress", title: "In Progress", cards: [] },
         { id: "needs_review", title: "Needs Review", cards: [] },
         { id: "closed", title: "Closed", cards: [] },
       ],

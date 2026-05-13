@@ -53,7 +53,7 @@ export const COLUMN_ACCENT: Record<AgentBoardColumnID, ColumnAccent> = {
     glow: "shadow-xs-border-base",
     drop: "bg-[#238636]/10 ring-[#3fb950]/30",
   },
-  running: {
+  in_progress: {
     dot: "bg-[#d29922]",
     text: "text-[#9a6700]",
     tint: "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))]",
@@ -85,7 +85,7 @@ export const COLUMN_ACCENT: Record<AgentBoardColumnID, ColumnAccent> = {
 export const COLUMN_ICON: Record<AgentBoardColumnID, IconProps["name"]> = {
   blocked: "circle-ban-sign",
   open: "circle-check",
-  running: "brain",
+  in_progress: "brain",
   needs_review: "review",
   closed: "archive",
 }
@@ -139,8 +139,11 @@ export function statusTone(status?: string) {
 }
 
 export function statusLabel(status?: string, options?: { capitalize?: boolean }) {
-  const value = (status ?? "open").replaceAll("_", " ")
+  const raw = (status ?? "open").replaceAll("_", " ")
+  const value = raw.toLowerCase() === "running" ? "in progress" : raw
   if (!options?.capitalize) return value
+  if (value.toLowerCase() === "in progress") return "In Progress"
+  if (value.toLowerCase() === "needs review") return "Needs Review"
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
@@ -150,12 +153,13 @@ export function visibleStatus(card: AgentBoardCard) {
   if (card.column === "blocked") return "blocked"
   if (card.issue.status) return card.issue.status
   if (card.column === "open") return "open"
-  if (card.column === "running") return "in_progress"
+  if (card.column === "in_progress") return "in_progress"
   if (card.column === "closed") return "closed"
   return card.column
 }
 
 export function cardSummary(card: AgentBoardCard) {
+  if (card.column === "closed") return ""
   const desc = card.issue.description?.trim()
   if (!desc) return ""
   return desc.length > 140 ? `${desc.slice(0, 137)}…` : desc

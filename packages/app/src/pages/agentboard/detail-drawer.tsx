@@ -1,5 +1,6 @@
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Markdown } from "@opencode-ai/ui/markdown"
 import { showToast } from "@opencode-ai/ui/toast"
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { ArtifactView, Timeline } from "./activity"
@@ -19,14 +20,6 @@ import {
 } from "./ui-tokens"
 
 const RUNNING = new Set(["queued", "running"])
-
-const COLUMN_HINT: Record<AgentBoardColumnID, string> = {
-  blocked: "Dependency-derived",
-  open: "Open work",
-  running: "Owned by a model",
-  needs_review: "Awaiting humans",
-  closed: "Done",
-}
 
 const REVIEW_PRESETS = [
   "Please run the relevant tests and report the exact command output.",
@@ -240,7 +233,7 @@ export function DetailDrawer(props: {
   const canReview = () => run()?.status === "needs_review" || run()?.status === "failed"
   const accent = () => COLUMN_ACCENT[props.card.column]
   const moveLabel = (column: AgentBoardColumnID) =>
-    column === "needs_review" ? "Review" : column === "open" ? "Open" : column === "running" ? "Running" : "Closed"
+    column === "needs_review" ? "Review" : column === "open" ? "Open" : column === "in_progress" ? "In Progress" : "Closed"
   const moveDisabled = (column: AgentBoardColumnID) => props.busy || !canMoveCardTo(props.card, column).ok
   const applyPreset = (preset: string) => {
     const current = message().trim()
@@ -302,7 +295,6 @@ export function DetailDrawer(props: {
           <div class="flex min-w-0 items-center gap-2">
             <span class={`size-2 rounded-full ${accent().dot}`} />
             <span class={`max-w-[11rem] truncate ${issueIDTone()}`}>{props.card.issue.id}</span>
-            <span class="text-11-regular text-text-weak">{COLUMN_HINT[props.card.column]}</span>
           </div>
           <button
             type="button"
@@ -377,9 +369,18 @@ export function DetailDrawer(props: {
           <div class="space-y-3">
             <section>
               <h3 class="text-10-semibold uppercase tracking-wider text-text-weak">Description</h3>
-              <p class="mt-2 whitespace-pre-wrap text-13-regular leading-relaxed text-text-base">
-                {props.card.issue.description || "No description provided."}
-              </p>
+              <Show
+                when={props.card.issue.description?.trim()}
+                fallback={<p class="mt-2 text-13-regular leading-relaxed text-text-weak">No description provided.</p>}
+              >
+                {(description) => (
+                  <Markdown
+                    text={description()}
+                    class="mt-2 text-13-regular leading-relaxed text-text-base"
+                    cacheKey={`agentboard-description:${props.card.issue.id}:${props.card.issue.raw.updated_at ?? ""}`}
+                  />
+                )}
+              </Show>
               <Show when={createdAt() || updatedAt()}>
                 <div class="mt-3 flex flex-wrap items-center gap-2 text-11-regular text-text-weak">
                   <Show when={createdAt()}>
@@ -555,7 +556,7 @@ export function DetailDrawer(props: {
         <div class="mb-3">
           <div class="mb-1.5 text-10-semibold uppercase tracking-wider text-text-weak">Move to</div>
           <div class="flex flex-wrap gap-1">
-            <For each={["open", "running", "needs_review", "closed"] as const}>
+            <For each={["open", "in_progress", "needs_review", "closed"] as const}>
               {(column) => (
                 <button
                   type="button"
@@ -574,9 +575,15 @@ export function DetailDrawer(props: {
         </div>
         <div class="flex flex-wrap gap-2 border-t border-border-weaker-base/60 pt-3">
           <Show when={canChat()}>
-            <Button variant="primary" size="small" icon="bubble-5" disabled={props.busy} onClick={props.onChat}>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded bg-primary px-2.5 py-1 text-11-semibold text-primary-foreground transition-[box-shadow,opacity,transform] duration-150 hover:opacity-90 hover:shadow-xs-border-base active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={props.busy}
+              onClick={props.onChat}
+            >
+              <Icon name="bubble-5" size="small" />
               Chat
-            </Button>
+            </button>
           </Show>
           <Show when={canOpen()}>
             <Button variant="secondary" size="small" icon="bubble-5" onClick={props.onOpenSession}>

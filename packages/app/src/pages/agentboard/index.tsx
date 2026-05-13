@@ -97,6 +97,30 @@ function latestEvent(card: AgentBoardCard) {
   return card.events.at(-1)
 }
 
+function boardContentKey(board: AgentBoardBoard) {
+  return JSON.stringify({
+    project: {
+      id: board.project.id,
+      worktree: board.project.worktree,
+      bdDbPath: board.project.bdDbPath,
+      enabled: board.project.enabled,
+    },
+    columns: board.columns.map((column) => ({
+      id: column.id,
+      title: column.title,
+      cards: column.cards.map((card) => ({
+        column: card.column,
+        issue: card.issue,
+        latestRun: card.latestRun,
+        activeRun: card.activeRun,
+        artifacts: card.artifacts,
+        events: card.events,
+      })),
+    })),
+    graph: board.graph,
+  })
+}
+
 type BoardDragTarget = {
   current: AgentBoardBoard
   card: AgentBoardCard
@@ -369,6 +393,8 @@ export default function AgentBoardPage() {
 
   function setOrderedBoard(next: AgentBoardBoard) {
     const ordered = applyBoardOrder(normalizeBoard(next), boardOrder())
+    const current = board()
+    if (current && boardContentKey(current) === boardContentKey(ordered)) return current
     processTransitions(ordered)
     setBoard(ordered)
     return ordered

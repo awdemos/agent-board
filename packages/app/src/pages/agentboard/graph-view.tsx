@@ -839,7 +839,7 @@ function GraphNodeCard(props: {
           </Show>
         </div>
         <div class="flex h-6 min-w-[3.75rem] shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-          <Show when={card().column === "open"}>
+          <Show when={card().column !== "closed"}>
             <button
               type="button"
               class="inline-flex h-6 items-center gap-1 rounded bg-primary px-2 text-10-semibold uppercase tracking-wide text-primary-foreground transition-[box-shadow,opacity,transform] duration-150 hover:opacity-90 hover:shadow-xs-border-base active:translate-y-px disabled:opacity-50"
@@ -1149,7 +1149,7 @@ export function GraphMode(props: {
   const columnStats = createMemo(() => {
     const counts = new Map<AgentBoardColumnID, number>()
     for (const node of visibleGraph().nodes) counts.set(node.card.column, (counts.get(node.card.column) ?? 0) + 1)
-    return (["open", "running", "needs_review", "closed"] as const)
+    return (["open", "in_progress", "needs_review", "closed"] as const)
       .map((column) => ({ column, count: counts.get(column) ?? 0 }))
       .filter((item) => item.count > 0)
   })

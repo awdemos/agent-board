@@ -136,20 +136,20 @@ describe("agentboard", () => {
 
   test("maps board drop targets to Beads statuses", () => {
     expect(beadsStatusForColumn("open")).toBe("open")
-    expect(beadsStatusForColumn("running")).toBe("in_progress")
+    expect(beadsStatusForColumn("in_progress")).toBe("in_progress")
     expect(beadsStatusForColumn("closed")).toBe("closed")
     expect(beadsStatusForColumn("needs_review")).toBe("in_progress")
     expect(() => beadsStatusForColumn("blocked")).toThrow("dependency-derived")
   })
 
   test("projects run lifecycle over Beads status when needed", () => {
-    expect(columnForIssue("open", run("queued"))).toBe("running")
-    expect(columnForIssue("open", run("running"))).toBe("running")
-    expect(columnForIssue("running", run("needs_review"))).toBe("needs_review")
-    expect(columnForIssue("running", run("failed"))).toBe("needs_review")
+    expect(columnForIssue("open", run("queued"))).toBe("in_progress")
+    expect(columnForIssue("open", run("running"))).toBe("in_progress")
+    expect(columnForIssue("in_progress", run("needs_review"))).toBe("needs_review")
+    expect(columnForIssue("in_progress", run("failed"))).toBe("needs_review")
     expect(columnForIssue("open", run("needs_review"))).toBe("needs_review")
     expect(columnForIssue("open", run("failed"))).toBe("needs_review")
-    expect(columnForIssue("running", run("done"))).toBe("closed")
+    expect(columnForIssue("in_progress", run("done"))).toBe("closed")
     expect(columnForIssue("blocked", run("cancelled"))).toBe("blocked")
   })
 

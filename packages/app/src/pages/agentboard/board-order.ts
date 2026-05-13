@@ -43,7 +43,10 @@ export function loadBoardOrder(directory: string): BoardLocalOrder {
     const parsedCards = parsed.cards as Record<string, string[] | undefined> | undefined
     const cards: BoardLocalOrder["cards"] = {}
     for (const column of BOARD_COLUMN_IDS) {
-      const order = parsedCards?.[column] ?? (column === "open" ? parsedCards?.ready : undefined)
+      const order =
+        parsedCards?.[column] ??
+        (column === "open" ? parsedCards?.ready : undefined) ??
+        (column === "in_progress" ? parsedCards?.running : undefined)
       if (Array.isArray(order)) cards[column] = order.filter((id): id is string => typeof id === "string")
     }
     return {

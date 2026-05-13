@@ -76,7 +76,7 @@ export function BoardCardContent(props: {
           }
         >
           <span class="flex shrink-0 items-center rounded-full bg-[#9e6a03]/14 px-1.5 py-0.5 text-10-semibold text-text-strong ring-1 ring-inset ring-[#d29922]/45">
-            Running
+            In Progress
           </span>
         </Show>
         <Show when={props.card.issue.priority !== undefined}>
@@ -133,7 +133,7 @@ export function BoardCardContent(props: {
         </div>
         <Show when={!props.preview}>
           <div class="flex h-6 min-w-[3.75rem] shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-            <Show when={props.card.column === "open" && props.onChat}>
+            <Show when={props.card.column !== "closed" && props.onChat}>
               <button
                 type="button"
                 class="inline-flex h-6 items-center gap-1 rounded bg-primary px-2 text-10-semibold uppercase tracking-wide text-primary-foreground transition-[box-shadow,opacity,transform] duration-150 hover:opacity-90 hover:shadow-xs-border-base active:translate-y-px disabled:opacity-50"

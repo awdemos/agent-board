@@ -45,7 +45,7 @@ function board(): AgentBoardBoard {
     graph: { dependencies: [], positions: [] },
     columns: [
       { id: "open", title: "Open", cards: [openCard, reviewableCard] },
-      { id: "running", title: "Running", cards: [] },
+      { id: "in_progress", title: "In Progress", cards: [] },
       { id: "needs_review", title: "Needs Review", cards: [] },
       { id: "closed", title: "Closed", cards: [] },
     ],
@@ -73,7 +73,7 @@ describe("agentboard board state", () => {
       ],
     })
 
-    expect(normalized.columns.map((column) => column.id)).toEqual(["open", "running", "needs_review", "closed"])
+    expect(normalized.columns.map((column) => column.id)).toEqual(["open", "in_progress", "needs_review", "closed"])
     expect(findCard(normalized, "AB-B")).toMatchObject({
       column: "open",
       issue: { blocked: true },
@@ -81,12 +81,12 @@ describe("agentboard board state", () => {
   })
 
   test("moves a card between columns optimistically", () => {
-    const moved = moveCardOnBoard(board(), "AB-1", "running")
+    const moved = moveCardOnBoard(board(), "AB-1", "in_progress")
 
-    expect(findCard(moved, "AB-1")?.column).toBe("running")
+    expect(findCard(moved, "AB-1")?.column).toBe("in_progress")
     expect(findCard(moved, "AB-1")?.issue.status).toBe("in_progress")
     expect(moved.columns.find((column) => column.id === "open")?.cards.map((card) => card.issue.id)).toEqual(["AB-2"])
-    expect(moved.columns.find((column) => column.id === "running")?.cards.map((card) => card.issue.id)).toEqual([
+    expect(moved.columns.find((column) => column.id === "in_progress")?.cards.map((card) => card.issue.id)).toEqual([
       "AB-1",
     ])
   })
@@ -107,6 +107,6 @@ describe("agentboard board state", () => {
     expect(canMoveCardTo(openCard, "needs_review").ok).toBe(true)
     expect(canMoveCardTo(completedOpenCard, "needs_review").ok).toBe(true)
     expect(canMoveCardTo(reviewableCard, "closed").ok).toBe(false)
-    expect(canMoveCardTo(reviewCard, "running").ok).toBe(false)
+    expect(canMoveCardTo(reviewCard, "in_progress").ok).toBe(false)
   })
 })

@@ -13,17 +13,17 @@ import type {
 const COLUMN_TITLES: Record<AgentBoardColumnID, string> = {
   blocked: "Blocked",
   open: "Open",
-  running: "Running",
+  in_progress: "In Progress",
   needs_review: "Needs Review",
   closed: "Closed",
 }
 
-const COLUMN_ORDER: AgentBoardColumnID[] = ["open", "running", "needs_review", "closed"]
+const COLUMN_ORDER: AgentBoardColumnID[] = ["open", "in_progress", "needs_review", "closed"]
 const ACTIVE_RUN_STATUS = new Set(["queued", "running"])
 
 export function columnForIssue(base: AgentBoardColumnID, run?: AgentBoardRun): AgentBoardColumnID {
   if (!run) return base
-  if (ACTIVE_RUN_STATUS.has(run.status)) return "running"
+  if (ACTIVE_RUN_STATUS.has(run.status)) return "in_progress"
   if (run.status === "done") return "closed"
   if (run.status === "needs_review" || run.status === "failed") return "needs_review"
   return base
@@ -32,7 +32,7 @@ export function columnForIssue(base: AgentBoardColumnID, run?: AgentBoardRun): A
 function columnForBeadsStatus(issue: BeadsIssue): AgentBoardColumnID {
   const status = issue.status?.toLowerCase().replaceAll("-", "_")
   if (status === "closed" || status === "done") return "closed"
-  if (status === "in_progress" || status === "running") return "running"
+  if (status === "in_progress" || status === "running") return "in_progress"
   if (status === "needs_review" || status === "review") return "needs_review"
   return "open"
 }
@@ -70,7 +70,7 @@ export async function getAgentBoard(worktree: string): Promise<AgentBoardBoard> 
 
   for (const issue of open) add(issue, "open")
   for (const issue of blocked) add(issue, columnForBeadsStatus(issue))
-  for (const issue of inProgress) add(issue, "running")
+  for (const issue of inProgress) add(issue, "in_progress")
 
   for (const run of AgentBoardStore.listRuns(project.id)) {
     if (!ACTIVE_RUN_STATUS.has(run.status) || seen.has(run.issueID)) continue
@@ -80,7 +80,7 @@ export async function getAgentBoard(worktree: string): Promise<AgentBoardBoard> 
     } catch {
       issue = { id: run.issueID, title: run.issueID, status: "in_progress", raw: {} }
     }
-    add(issue, "running")
+    add(issue, "in_progress")
   }
 
   for (const run of AgentBoardStore.listRuns(project.id)) {
