@@ -1,144 +1,65 @@
-# OpenCode AgentBoard
-
 <p align="center">
-  <img src="assets/header.png" alt="OpenCode AgentBoard" width="100%">
+  <img src="assets/header.png" alt="AgentBoard" width="100%">
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/status-experimental_preview-8b5cf6" alt="Experimental Preview">
-  <img src="https://img.shields.io/badge/runtime-Electron-47848f" alt="Electron">
-  <img src="https://img.shields.io/badge/issues-Beads-8b5cf6" alt="Beads">
-  <img src="https://img.shields.io/badge/fork-OpenCode-blue" alt="OpenCode Fork">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
-</p>
+AgentBoard turns your [Beads](https://github.com/steveyegge/beads) issues into a workspace where you and your coding models can plan, review, and hand off work together.
 
-**A local task board, dependency graph, and review surface for coding models.**
+Instead of scattering tasks across long chat histories, it provides **three synchronized views** of the same local issue graph:
 
-OpenCode AgentBoard is an experimental fork of [OpenCode](https://github.com/anomalyco/opencode) that turns [Beads](https://github.com/steveyegge/beads) issues into a desktop workspace for planning, reviewing, and handing work to chat.
+- **Board** — Kanban columns (Open → In Progress → Needs Review → Closed)
+- **List** — Fast scanning of large backlogs
+- **Graph** — Interactive dependency map with zoom, pan, minimap, and manual layout
 
-Instead of keeping every task in a long conversation, AgentBoard gives you three views of the same local issue graph:
-
-- **Board** for flow: open, in progress, needs review, closed
-- **List** for scanning a large backlog quickly
-- **Graph** for understanding dependencies before asking a model to work
-
-Blocked work stays visible as a dependency state, not a separate place where tasks disappear.
-
-> This fork is not built by, endorsed by, or affiliated with the OpenCode team.
-
-## Why This Exists
-
-Chat is where models execute. AgentBoard is where humans and models decide what should happen next.
-
-When a codebase has dozens or hundreds of tasks, you need to know:
-
-- what is ready to work on
-- what is blocked by dependencies
-- what changed recently
-- what needs human review
-- which task should be handed to a model next
-
-AgentBoard keeps that work in Beads, then gives both you and the model a shared visual surface on top of it.
+Everything stays local. Beads is the single source of truth. Most models already understand it without extra skills.
 
 <p align="center">
-  <img src="assets/board.png" alt="AgentBoard board view" width="900">
+  <img src="assets/three-light.png" alt="AgentBoard — Board, List, and Graph views (light mode)" width="1000">
 </p>
 
-| Dependency Graph | Issue Drawer |
-|:-:|:-:|
-| ![Dependency Graph](assets/graph.png?raw=true) | ![Issue Drawer](assets/drawer.png?raw=true) |
+## Why AgentBoard
+
+In the last few weeks, OpenAI released [Symphony](https://openai.com/index/introducing-openai-symphony/), [Cursor](https://github.com/cursor/cookbook/tree/main/sdk/agent-kanban) and [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban) added their own board. All of them require the agent to learn and maintain a separate orchestration system.
+
+AgentBoard takes a different approach: it reuses [Beads](https://github.com/steveyegge/beads), a lightweight local-first issue tracker that many models already know natively. The UI works inside the [OpenCode](https://github.com/anomalyco/opencode) desktop environment.
+
+No new formats to teach the LLM. No black-box state. If you already use Beads, AgentBoard will already work for you.
 
 ## Features
 
-- **Kanban board** — Open, In Progress, Needs Review, and Closed columns backed by Beads
-- **Dependency graph** — Zoomable graph with pan, fit, minimap, filters, manual positioning, and readable dependency arrows
-- **List view** — A dense, clean way to scan issues without moving cards around
-- **Issue drawer** — Type, status, priority, dependencies, description, created/updated age, timeline, artifacts, raw payload, and quick transitions
-- **Chat handoff** — Open an OpenCode chat with the selected Beads issue already attached
-- **Issue creation** — Create Beads issues from the bottom composer, optionally continuing in chat
-- **Beads setup flow** — Initialize Beads from the UI or use an existing `.beads` database
-- **Local-first state** — Beads remains the source of truth for issue content, status, priority, and dependencies
+- **Kanban Board** — Drag cards between columns; status updates sync instantly to Beads
+- **Interactive Dependency Graph** — Zoom, pan, minimap, filters, and manual node positioning
+- **List View** — Scan hundreds of tasks
+- **Rich Issue Drawer** — Dependencies, timeline, artifacts, priority, and quick actions
+- **One-click Chat Handoff** — Open OpenCode chat with the selected issue pre-attached
+- **Inline Issue Creation** — Create tasks from the composer and optionally continue straight into chat
+- **Local-first** — Beads database remains the single source of truth for status, priority, and dependencies
 
-## Run Locally
+## Get Started
 
-AgentBoard is currently easiest to try as a local desktop development build.
-
-Requirements:
-
-- [Bun](https://bun.sh)
-- Beads `bd` CLI on your `PATH`
+Requires [Bun](https://bun.sh) and the Beads `bd` CLI on your PATH.
 
 ```bash
 git clone https://github.com/bernaferrari/opencode-agentboard
 cd opencode-agentboard
 bun install
-VITE_OPENCODE_DEBUG_BAR=false bun run dev:desktop
+bun run dev:desktop
 ```
 
-Then:
+1. Open your project in the OpenCode desktop app
+2. Click **AgentBoard** in the sidebar
+3. Initialize Beads with one click (or run `bd init` in your project folder)
 
-1. Open a project in the desktop app.
-2. Click **AgentBoard** in the project sidebar.
-3. If the project does not have Beads set up yet, click **Initialize Beads**.
+**Pro tip:** Run `npx skills beads` to teach any model how to use [Beads](https://github.com/gastownhall/beads).
 
-You can also initialize Beads manually:
+## Philosophy
 
-```bash
-cd /path/to/your/project
-bd init
-```
+This fork was built after studying [OpenAI Symphony](https://openai.com/index/introducing-openai-symphony/), [Cursor's agent Kanban](https://github.com/cursor/cookbook/tree/main/sdk/agent-kanban), and [beads-ui](https://github.com/mantoni/beads-ui). The goal is a lightweight, uncoupled interface that works with any model that already understands Beads, rather than forcing yet another custom system. Although OpenCode is helpful for some chat features, it is easy to extract AgentBoard into its own desktop client or add as part of any existing app/IDE. There are a few styling and UI components being reused from OpenCode, but nothing that can't be easily if needed.
 
-Beads docs: [github.com/steveyegge/beads](https://github.com/steveyegge/beads)
+This fork periodically rebases onto upstream OpenCode. Feedback and contributions are welcome.
 
-Tip: `npx skills beads` teaches any model to use Beads.
-
-## What Works Today
-
-- Load Beads issues into Board, List, and Graph views
-- Create issues from the AgentBoard composer
-- Move issues across board columns and persist status back to Beads
-- See blocked issues inline with lock indicators and dependency details
-- Reorder cards and board sections locally
-- Inspect blockers, dependencies, and related issues from the drawer
-- See timeline and artifact counts when available
-- Open a chat with issue context attached
-- Persist graph node positions and use fit/minimap controls
-
-## What This Is Not
-
-- It is not a hosted service.
-- It is not a replacement for Beads.
-- It is not a replacement for OpenCode chat.
-- It is not an official OpenCode feature.
-
-AgentBoard is a local-first experiment for making model-driven coding work easier to see, steer, and review.
-
-## Status
-
-This is an experimental preview. The core desktop loop works today, but the graph layout, deeper automation, packaging, and release polish are still evolving.
-
-The goal is to explore a simple idea: coding models should not only live in chat. They should also share a task board, dependency graph, and review surface with the human.
-
-## Origin
-
-AgentBoard started after studying several agent-orchestration interfaces:
-
-- [OpenAI Symphony](https://openai.com/index/open-source-codex-orchestration-symphony/) for orchestration architecture ideas
-- Cursor-style kanban workflows for the interaction model
-- Beads UI for a Beads-native baseline
-- OpenCode for the desktop shell, project model, and chat runtime
-
-The direction became: a Symphony-inspired workflow, a Cursor-inspired interface, OpenCode as the desktop shell, and Beads as the local issue substrate. The app was then iterated manually with Codex: board first, then graph, then list.
-
-## Relationship To OpenCode
-
-This repository is a fork of [anomalyco/opencode](https://github.com/anomalyco/opencode). It keeps OpenCode's desktop shell and chat experience, then adds AgentBoard as an experiment on top.
-
-Upstream OpenCode:
-
-- Website: [opencode.ai](https://opencode.ai)
-- GitHub: [github.com/anomalyco/opencode](https://github.com/anomalyco/opencode)
-- Docs: [opencode.ai/docs](https://opencode.ai/docs)
+<p align="center">
+  <img src="assets/three-dark.png" alt="AgentBoard — Board, List, and Graph views (dark mode)" width="1000">
+</p>
 
 ## License
 

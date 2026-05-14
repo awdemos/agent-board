@@ -6,7 +6,7 @@ import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { ArtifactView, Timeline } from "./activity"
 import { type AgentBoardCard, type AgentBoardColumnID, type AgentBoardDependency } from "./api"
 import { canMoveCardTo } from "./board-state"
-import { issueCreatedTimestamp, issueTypeMeta, issueUpdatedTimestamp } from "./issue-utils"
+import { issueCloseReason, issueCreatedTimestamp, issueTypeMeta, issueUpdatedTimestamp } from "./issue-utils"
 import { formatAbsolute, formatRelative } from "./time-utils"
 import {
   cardSummary,
@@ -227,6 +227,7 @@ export function DetailDrawer(props: {
   )
   const createdAt = () => issueCreatedTimestamp(props.card.issue)
   const updatedAt = () => issueUpdatedTimestamp(props.card)
+  const closeReason = () => issueCloseReason(props.card.issue)
   const canOpen = () => !!run()?.opencodeSessionID
   const canChat = () => props.card.column !== "closed"
   const canCancel = () => !!run() && RUNNING.has(run()!.status)
@@ -408,6 +409,18 @@ export function DetailDrawer(props: {
                 </div>
               </Show>
             </section>
+            <Show when={closeReason()}>
+              {(reason) => (
+                <section class="rounded-md bg-surface-raised-base p-3">
+                  <h3 class="text-10-semibold uppercase tracking-wider text-text-weak">Close reason</h3>
+                  <Markdown
+                    text={reason()}
+                    class="mt-2 text-13-regular leading-relaxed text-text-base"
+                    cacheKey={`agentboard-close-reason:${props.card.issue.id}:${props.card.issue.raw.closed_at ?? props.card.issue.raw.updated_at ?? ""}`}
+                  />
+                </section>
+              )}
+            </Show>
             <DependencySection
               title="Blocked by"
               items={blockingPrerequisites()}

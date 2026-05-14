@@ -192,6 +192,12 @@ export function issueUpdatedTimestamp(card: AgentBoardCard) {
   )
 }
 
+export function issueCloseReason(issue: BeadsIssue) {
+  const raw = issue.raw
+  if (!raw || typeof raw !== "object") return undefined
+  return readStringField(raw as Record<string, unknown>, ["close_reason"])?.trim()
+}
+
 export function closedSortTimestamp(card: AgentBoardCard) {
   return (
     card.latestRun?.time.ended ??
