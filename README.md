@@ -2,7 +2,7 @@
   <img src="assets/header.png" alt="AgentBoard" width="100%">
 </p>
 
-AgentBoard turns your [Beads](https://github.com/steveyegge/beads) issues into a workspace where you and your coding models can plan, review, and hand off work together.
+AgentBoard turns your [Beads](https://github.com/gastownhall/beads) issues into a workspace where you and your coding models can plan, review, and hand off work together.
 
 Instead of scattering tasks across long chat histories, it provides **three synchronized views** of the same local issue graph:
 
@@ -18,9 +18,9 @@ Everything stays local. Beads is the single source of truth. Most models already
 
 ## Why AgentBoard
 
-In the last few weeks, OpenAI released [Symphony](https://openai.com/index/introducing-openai-symphony/), [Cursor](https://github.com/cursor/cookbook/tree/main/sdk/agent-kanban) and [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban) added their own board. All of them require the agent to learn and maintain a separate orchestration system.
+In the last few weeks, OpenAI released [Symphony](https://openai.com/index/introducing-openai-symphony/), [Cursor](https://github.com/cursor/cookbook/tree/main/sdk/agent-kanban) made an example and [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban) shipped their own board. All of them require the agent to learn and maintain a separate orchestration system.
 
-AgentBoard takes a different approach: it reuses [Beads](https://github.com/steveyegge/beads), a lightweight local-first issue tracker that many models already know natively. The UI works inside the [OpenCode](https://github.com/anomalyco/opencode) desktop environment.
+AgentBoard takes a different approach: it reuses [Beads](https://github.com/gastownhall/beads), a lightweight local-first issue tracker that many models already know natively. The UI works inside the [OpenCode](https://github.com/anomalyco/opencode) desktop environment.
 
 No new formats to teach the LLM. No black-box state. If you already use Beads, AgentBoard will already work for you.
 
@@ -39,8 +39,8 @@ No new formats to teach the LLM. No black-box state. If you already use Beads, A
 Requires [Bun](https://bun.sh) and the Beads `bd` CLI on your PATH.
 
 ```bash
-git clone https://github.com/bernaferrari/opencode-agentboard
-cd opencode-agentboard
+git clone https://github.com/bernaferrari/agent-board
+cd agent-board
 bun install
 bun run dev:desktop
 ```
