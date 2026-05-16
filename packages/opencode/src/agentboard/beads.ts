@@ -227,8 +227,9 @@ export function createIssueArgs(input: BeadsCreateInput) {
 }
 
 export const Beads = {
-  async init(cwd: string) {
-    return runBd(["init"], { cwd })
+  async init(cwd: string, prefix?: string) {
+    const args = prefix ? ["init", "--prefix", prefix] : ["init"]
+    return runBd(args, { cwd })
   },
   async listBlocked(cwd: string) {
     return (await runBdJson<BeadsRawIssue[]>(["blocked", "--json"], { cwd })).map(normalizeIssue).filter((x) => x.id)

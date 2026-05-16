@@ -149,7 +149,18 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
   ]),
 )
 
-const rawInstanceRoutes = Layer.mergeAll(ptyConnectRoute, agentBoardRoute).pipe(Layer.provide(instanceRouterLayer))
+const debugRoute = HttpRouter.use((router) =>
+  Effect.gen(function* () {
+    yield* router.add("GET", "/debug/test",
+      Effect.gen(function* () {
+        console.log("[debug] Test route hit")
+        return yield* HttpServerResponse.json({ ok: true })
+      }),
+    )
+  }),
+).pipe(Layer.provide(instanceRouterLayer))
+
+const rawInstanceRoutes = Layer.mergeAll(ptyConnectRoute, agentBoardRoute, debugRoute).pipe(Layer.provide(instanceRouterLayer))
 const instanceRoutes = Layer.mergeAll(rawInstanceRoutes, instanceApiRoutes).pipe(
   Layer.provide([
     httpApiAuthLayer,

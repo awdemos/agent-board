@@ -9,13 +9,17 @@ const log = Log.create({ service: "server" })
 export const errorLayer = HttpRouter.middleware<{ handles: unknown }>()((effect) =>
   effect.pipe(
     Effect.catchCause((cause) => {
+      console.error("[error-layer] Caught cause:", Cause.pretty(cause))
       const defect = cause.reasons.filter(Cause.isDieReason).find((reason) => {
         if (HttpServerResponse.isHttpServerResponse(reason.defect)) return false
         if (HttpServerError.isHttpServerError(reason.defect)) return false
         if (HttpServerRespondable.isRespondable(reason.defect)) return false
         return true
       })
-      if (!defect) return Effect.failCause(cause)
+      if (!defect) {
+        console.error("[error-layer] No defect found, re-failing")
+        return Effect.failCause(cause)
+      }
 
       const error = defect.defect
       log.error("failed", { error, cause: Cause.pretty(cause) })

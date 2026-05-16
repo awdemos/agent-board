@@ -1,0 +1,76 @@
+FROM oven/bun:alpine AS builder
+
+# Install build dependencies (Python, make, g++ needed for native modules)
+RUN apk add --no-cache python3 make g++
+
+WORKDIR /app
+
+# Copy package files for dependency caching
+COPY package.json bun.lock ./
+COPY packages/core/package.json ./packages/core/
+COPY packages/sdk/js/package.json ./packages/sdk/js/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/script/package.json ./packages/script/
+COPY packages/plugin/package.json ./packages/plugin/
+COPY packages/opencode/package.json ./packages/opencode/
+COPY packages/app/package.json ./packages/app/
+COPY packages/slack/package.json ./packages/slack/
+COPY packages/desktop/package.json ./packages/desktop/
+COPY packages/enterprise/package.json ./packages/enterprise/
+COPY packages/function/package.json ./packages/function/
+COPY packages/http-recorder/package.json ./packages/http-recorder/
+COPY packages/llm/package.json ./packages/llm/
+COPY packages/storybook/package.json ./packages/storybook/
+COPY packages/web/package.json ./packages/web/
+COPY packages/console/app/package.json ./packages/console/app/
+COPY packages/console/core/package.json ./packages/console/core/
+COPY packages/console/function/package.json ./packages/console/function/
+COPY packages/console/mail/package.json ./packages/console/mail/
+COPY packages/console/resource/package.json ./packages/console/resource/
+
+# Copy patches and scripts needed for installation
+COPY patches ./patches
+COPY packages/opencode/script ./packages/opencode/script
+
+# Install dependencies
+RUN bun install
+
+# Copy source code
+COPY . .
+
+# Install beads CLI globally
+RUN bun install -g @beads/bd
+
+# Build the frontend
+RUN cd packages/app && bun run build
+
+FROM oven/bun:alpine AS backend
+
+# Install runtime dependencies
+# gcompat is needed for beads CLI (glibc compatibility on Alpine/musl)
+RUN apk add --no-cache libgcc libstdc++ ripgrep git curl gcompat
+
+# Install beads CLI globally and run postinstall to download binary
+RUN bun install -g @beads/bd && \
+    node /root/.bun/install/global/node_modules/@beads/bd/scripts/postinstall.js
+
+WORKDIR /app/packages/opencode
+
+# Copy installed dependencies and source from builder
+COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app/packages /app/packages
+
+# Create directories for opencode data, config, and projects
+RUN mkdir -p /root/.local/share/opencode /root/.config/opencode /projects
+
+# Copy global config with provider settings
+COPY .opencode/opencode.jsonc /root/.config/opencode/opencode.jsonc
+
+EXPOSE 4096
+
+ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+ENV NODE_ENV=production
+
+# Run the opencode server
+# --hostname 0.0.0.0 is required to accept connections from outside the container
+CMD ["bun", "run", "--conditions=browser", "./src/index.ts", "serve", "--port", "4096", "--hostname", "0.0.0.0"]

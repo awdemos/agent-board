@@ -9,7 +9,7 @@ import * as Fence from "@/server/shared/fence"
 import { getWorkspaceRouteSessionID, isLocalWorkspaceRoute, workspaceProxyURL } from "@/server/shared/workspace-routing"
 import { NotFoundError } from "@/storage/storage"
 import { Flag } from "@opencode-ai/core/flag/flag"
-import { Context, Data, Effect, Layer, Schema } from "effect"
+import { Cause, Context, Data, Effect, Layer, Schema } from "effect"
 import { HttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiMiddleware } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
@@ -224,11 +224,17 @@ export const workspaceRouterMiddleware = HttpRouter.middleware<{ provides: Works
     return (effect) =>
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
+        console.log("[workspace-routing] Request:", request.method, request.url)
         const plan = yield* planRequest(request)
+        console.log("[workspace-routing] Plan:", plan._tag)
         return yield* routeWorkspace(client, effect, plan)
       }).pipe(
         Effect.provideService(Socket.WebSocketConstructor, makeWebSocket),
         Effect.provideService(Workspace.Service, workspace),
+        Effect.catchCause((cause) => {
+          console.error("[workspace-routing] Error:", Cause.pretty(cause))
+          return Effect.failCause(cause)
+        }),
       )
   }),
 )

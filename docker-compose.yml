@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: packages/opencode/Dockerfile.compose
+    ports:
+      - "4096:4096"
+    volumes:
+      - projects-data:/projects
+      - opencode-data:/root/.local/share/opencode
+      - ./packages/opencode/src:/app/packages/opencode/src:Z
+    environment:
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
+      - OPENCODE_AUTH_CONTENT=${OPENCODE_AUTH_CONTENT}
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -sf http://localhost:4096/doc >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - agentboard
+
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/app/Dockerfile
+    ports:
+      - "8081:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - agentboard
+
+volumes:
+  opencode-data:
+  projects-data:
+
+networks:
+  agentboard:
+    driver: bridge

@@ -1,3 +1,4 @@
+import { mkdir } from "node:fs/promises"
 import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import z from "zod"
@@ -85,6 +86,22 @@ export function AgentBoardRoutes(input: { worktree: string }) {
         return AgentBoardStore.upsertProject(body)
       }),
     )
+    .post("/projects/create", async (c) =>
+      handle(c, async () => {
+        const body = z.object({ path: z.string().trim().min(1) }).parse(await c.req.json())
+        const targetPath = body.path
+        await mkdir(targetPath, { recursive: true })
+        const result = await Beads.init(targetPath)
+        const project = AgentBoardStore.upsertProject({ worktree: targetPath })
+        AgentBoardEvents.emit({ type: "board.updated", projectID: project.id })
+        return {
+          ok: true,
+          project,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        }
+      }),
+    )
     .get("/board", async (c) => handle(c, () => getAgentBoard(worktree)))
     .post("/graph/positions", async (c) =>
       handle(c, async () => {
@@ -143,7 +160,8 @@ export function AgentBoardRoutes(input: { worktree: string }) {
     )
     .post("/setup/init", async (c) =>
       handle(c, async () => {
-        const result = await Beads.init(worktree)
+        const prefix = worktree.split("/").filter(Boolean).pop() || "project"
+        const result = await Beads.init(worktree, prefix)
         const project = AgentBoardStore.upsertProject({ worktree })
         AgentBoardEvents.emit({ type: "board.updated", projectID: project.id })
         return {

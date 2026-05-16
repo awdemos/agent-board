@@ -3,13 +3,16 @@ import { Dialog } from "@opencode-ai/ui/dialog"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { List } from "@opencode-ai/ui/list"
 import type { ListRef } from "@opencode-ai/ui/list"
+import { Button } from "@opencode-ai/ui/button"
+import { InlineInput } from "@opencode-ai/ui/inline-input"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
 import fuzzysort from "fuzzysort"
-import { createMemo, createResource, createSignal } from "solid-js"
+import { createMemo, createResource, createSignal, Show } from "solid-js"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLayout } from "@/context/layout"
 import { useLanguage } from "@/context/language"
+import { showToast } from "@opencode-ai/ui/toast"
 
 interface DialogSelectDirectoryProps {
   title?: string
@@ -253,6 +256,9 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
   const language = useLanguage()
 
   const [filter, setFilter] = createSignal("")
+  const [createMode, setCreateMode] = createSignal(false)
+  const [createPath, setCreatePath] = createSignal("")
+  const [creating, setCreating] = createSignal(false)
   let list: ListRef | undefined
 
   const missingBase = createMemo(() => !(sync.data.path.home || sync.data.path.directory))
@@ -321,72 +327,151 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     dialog.close()
   }
 
+  async function handleCreateProject() {
+    const path = createPath().trim()
+    if (!path) {
+      showToast({ title: "Error", description: "Please enter a project path" })
+      return
+    }
+    setCreating(true)
+    try {
+      const response = await fetch("/agentboard/projects/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: "Failed to create project" }))
+        throw new Error(error.error || "Failed to create project")
+      }
+      showToast({ title: "Success", description: `Project created at ${path}` })
+      resolve(path)
+    } catch (err) {
+      showToast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to create project",
+      })
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <Dialog title={props.title ?? language.t("command.project.open")}>
-      <List
-        search={{ placeholder: language.t("dialog.directory.search.placeholder"), autofocus: true }}
-        emptyMessage={language.t("dialog.directory.empty")}
-        loadingMessage={language.t("common.loading")}
-        items={items}
-        key={(x) => x.absolute}
-        filterKeys={["search"]}
-        groupBy={(item) => item.group}
-        sortGroupsBy={(a, b) => {
-          if (a.category === b.category) return 0
-          return a.category === "recent" ? -1 : 1
-        }}
-        groupHeader={(group) =>
-          group.category === "recent" ? language.t("home.recentProjects") : language.t("command.project.open")
-        }
-        ref={(r) => (list = r)}
-        onFilter={(value) => setFilter(cleanInput(value))}
-        onKeyEvent={(e, item) => {
-          if (e.key !== "Tab") return
-          if (e.shiftKey) return
-          if (!item) return
+      <Show
+        when={createMode()}
+        fallback={
+          <>
+            <List
+              search={{ placeholder: language.t("dialog.directory.search.placeholder"), autofocus: true }}
+              emptyMessage={language.t("dialog.directory.empty")}
+              loadingMessage={language.t("common.loading")}
+              items={items}
+              key={(x) => x.absolute}
+              filterKeys={["search"]}
+              groupBy={(item) => item.group}
+              sortGroupsBy={(a, b) => {
+                if (a.category === b.category) return 0
+                return a.category === "recent" ? -1 : 1
+              }}
+              groupHeader={(group) =>
+                group.category === "recent" ? language.t("home.recentProjects") : language.t("command.project.open")
+              }
+              ref={(r) => (list = r)}
+              onFilter={(value) => setFilter(cleanInput(value))}
+              onKeyEvent={(e, item) => {
+                if (e.key !== "Tab") return
+                if (e.shiftKey) return
+                if (!item) return
 
-          e.preventDefault()
-          e.stopPropagation()
+                e.preventDefault()
+                e.stopPropagation()
 
-          const value = displayPath(item.absolute, filter(), home())
-          list?.setFilter(value.endsWith("/") ? value : value + "/")
-        }}
-        onSelect={(path) => {
-          if (!path) return
-          resolve(path.absolute)
-        }}
-      >
-        {(item) => {
-          const path = displayPath(item.absolute, filter(), home())
-          if (path === "~") {
-            return (
-              <div class="w-full flex items-center justify-between rounded-md">
-                <div class="flex items-center gap-x-3 grow min-w-0">
-                  <FileIcon node={{ path: item.absolute, type: "directory" }} class="shrink-0 size-4" />
-                  <div class="flex items-center text-14-regular min-w-0">
-                    <span class="text-text-strong whitespace-nowrap">~</span>
-                    <span class="text-text-weak whitespace-nowrap">/</span>
+                const value = displayPath(item.absolute, filter(), home())
+                list?.setFilter(value.endsWith("/") ? value : value + "/")
+              }}
+              onSelect={(path) => {
+                if (!path) return
+                resolve(path.absolute)
+              }}
+            >
+              {(item) => {
+                const path = displayPath(item.absolute, filter(), home())
+                if (path === "~") {
+                  return (
+                    <div class="w-full flex items-center justify-between rounded-md">
+                      <div class="flex items-center gap-x-3 grow min-w-0">
+                        <FileIcon node={{ path: item.absolute, type: "directory" }} class="shrink-0 size-4" />
+                        <div class="flex items-center text-14-regular min-w-0">
+                          <span class="text-text-strong whitespace-nowrap">~</span>
+                          <span class="text-text-weak whitespace-nowrap">/</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                return (
+                  <div class="w-full flex items-center justify-between rounded-md">
+                    <div class="flex items-center gap-x-3 grow min-w-0">
+                      <FileIcon node={{ path: item.absolute, type: "directory" }} class="shrink-0 size-4" />
+                      <div class="flex items-center text-14-regular min-w-0">
+                        <span class="text-text-weak whitespace-nowrap overflow-hidden overflow-ellipsis truncate min-w-0">
+                          {getDirectory(path)}
+                        </span>
+                        <span class="text-text-strong whitespace-nowrap">{getFilename(path)}</span>
+                        <span class="text-text-weak whitespace-nowrap">/</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )
-          }
-          return (
-            <div class="w-full flex items-center justify-between rounded-md">
-              <div class="flex items-center gap-x-3 grow min-w-0">
-                <FileIcon node={{ path: item.absolute, type: "directory" }} class="shrink-0 size-4" />
-                <div class="flex items-center text-14-regular min-w-0">
-                  <span class="text-text-weak whitespace-nowrap overflow-hidden overflow-ellipsis truncate min-w-0">
-                    {getDirectory(path)}
-                  </span>
-                  <span class="text-text-strong whitespace-nowrap">{getFilename(path)}</span>
-                  <span class="text-text-weak whitespace-nowrap">/</span>
-                </div>
-              </div>
+                )
+              }}
+            </List>
+            <div class="mt-3 pt-3 border-t border-border-weak-base">
+              <Button
+                variant="ghost"
+                class="w-full text-left justify-start text-text-base px-2"
+                onClick={() => {
+                  setCreateMode(true)
+                  setCreatePath("")
+                }}
+              >
+                <span class="mr-2">+</span> Create New Project
+              </Button>
             </div>
-          )
-        }}
-      </List>
+          </>
+        }
+      >
+        <div class="flex flex-col gap-3 p-2">
+          <div class="text-14-medium text-text-strong">Create New Project</div>
+          <div class="text-12-regular text-text-weak">Enter the full path for the new project directory.</div>
+          <InlineInput
+            placeholder="/projects/my-new-project"
+            value={createPath()}
+            onChange={setCreatePath}
+            autofocus
+            onSubmit={() => void handleCreateProject()}
+          />
+          <div class="flex gap-2">
+            <Button
+              variant="primary"
+              class="grow"
+              disabled={creating() || !createPath().trim()}
+              onClick={() => void handleCreateProject()}
+            >
+              {creating() ? "Creating..." : "Create Project"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setCreateMode(false)
+                setCreatePath("")
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Show>
     </Dialog>
   )
 }

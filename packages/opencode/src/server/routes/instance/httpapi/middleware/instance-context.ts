@@ -1,6 +1,6 @@
 import { WorkspaceRef } from "@/effect/instance-ref"
 import { InstanceStore } from "@/project/instance-store"
-import { Effect, Layer } from "effect"
+import { Cause, Effect, Layer } from "effect"
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiMiddleware } from "effect/unstable/httpapi"
 import { WorkspaceRouteContext } from "./workspace-routing"
@@ -25,10 +25,22 @@ function provideInstanceContext<E>(
   store: InstanceStore.Interface,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, E, WorkspaceRouteContext> {
   return Effect.gen(function* () {
+    console.log("[instance-context] Loading instance...")
     const route = yield* WorkspaceRouteContext
+    console.log("[instance-context] Route directory:", route.directory)
     return yield* store.provide(
       { directory: decode(route.directory) },
       effect.pipe(Effect.provideService(WorkspaceRef, route.workspaceID)),
+    ).pipe(
+      Effect.catchCause((cause) => {
+        console.error("[instance-context] Error:", Cause.pretty(cause))
+        return Effect.succeed(
+          HttpServerResponse.text(
+            Cause.pretty(cause),
+            { status: 500 },
+          ),
+        )
+      }),
     )
   })
 }
