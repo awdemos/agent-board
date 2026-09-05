@@ -1,9 +1,12 @@
 import { WorkspaceRef } from "@/effect/instance-ref"
 import { InstanceStore } from "@/project/instance-store"
+import * as Log from "@opencode-ai/core/util/log"
 import { Cause, Effect, Layer } from "effect"
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiMiddleware } from "effect/unstable/httpapi"
 import { WorkspaceRouteContext } from "./workspace-routing"
+
+const log = Log.create({ service: "server" })
 
 export class InstanceContextMiddleware extends HttpApiMiddleware.Service<
   InstanceContextMiddleware,
@@ -25,18 +28,19 @@ function provideInstanceContext<E>(
   store: InstanceStore.Interface,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, E, WorkspaceRouteContext> {
   return Effect.gen(function* () {
-    console.log("[instance-context] Loading instance...")
     const route = yield* WorkspaceRouteContext
-    console.log("[instance-context] Route directory:", route.directory)
     return yield* store.provide(
       { directory: decode(route.directory) },
       effect.pipe(Effect.provideService(WorkspaceRef, route.workspaceID)),
     ).pipe(
       Effect.catchCause((cause) => {
-        console.error("[instance-context] Error:", Cause.pretty(cause))
+        const defect = cause.reasons.find(Cause.isDieReason)
+        if (!defect) return Effect.failCause(cause)
+
+        log.error("instance context defect", { cause: Cause.pretty(cause) })
         return Effect.succeed(
-          HttpServerResponse.text(
-            Cause.pretty(cause),
+          HttpServerResponse.jsonUnsafe(
+            { name: "UnknownError", data: { message: "Unexpected server error. Check server logs for details." } },
             { status: 500 },
           ),
         )
